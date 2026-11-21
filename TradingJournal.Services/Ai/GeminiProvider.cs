@@ -8,22 +8,27 @@ using System.Text.Json.Serialization;
 namespace TradingJournal.Services.Ai;
 
 // Google Gemini REST API istemcisi (generateContent uç noktası).
-// Model adları sık değiştiği için: ayarlanan model bulunamazsa (404) hesabın erişebildiği
-// modeller listelenir ve en uygun "Flash" modeli otomatik seçilir.
+//
+// Model seçimi: Model adları sık değişir ve popüler modeller zaman zaman "yoğun" (503) hatası verir.
+// Bu yüzden ayarlanan model bulunamazsa (404), yoğunsa (5xx), o modelin kotası dolmuşsa (429) ya da
+// zamanında cevap vermezse; hesabın erişebildiği modeller listelenir ve sıradaki uygun model denenir
+// (en fazla 3 model). Cevap veren model hatırlanır, sonraki isteklerde önce o kullanılır.
 public class GeminiProvider : IAiProvider
 {
     public const string DefaultModel = "gemini-flash-latest";
     private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta";
+    private const int MaxModelAttempts = 3;
+    private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(75);
 
     private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(180) };
 
-    // Yeni Flash modelleri cevaptan önce "düşünür"; bu, cevabı dakikalarca geciktirebilir.
+    // Yeni Flash modelleri cevaptan önce "düşünür"; bu, cevabı çok geciktirebilir.
     // Koç yorumu için derin düşünmeye gerek yok, düşünme seviyesi "low" istenir.
     // Model bu ayarı tanımazsa (400) bir daha gönderilmez.
     private static bool _thinkingConfigUnsupported;
 
-    // Otomatik bulunan model, uygulama açık kaldıkça tekrar aranmasın.
-    private static string? _resolvedModel;
+    // Son başarılı model: uygulama açık kaldıkça önce bu denenir.
+    private static string? _workingModel;
 
     private readonly string _apiKey;
     private readonly string _model;
@@ -36,32 +41,69 @@ public class GeminiProvider : IAiProvider
         _model = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
     }
 
-    public string Name => $"Google Gemini ({_resolvedModel ?? _model})";
+    public string Name => $"Google Gemini ({_workingModel ?? _model})";
 
     public async Task<string> GenerateAsync(string systemPrompt, IReadOnlyList<ChatMessage> messages,
         CancellationToken cancellationToken = default)
     {
-        string model = _resolvedModel ?? _model;
         try
         {
-            return await SendAsync(model, systemPrompt, messages, cancellationToken);
-        }
-        catch (ModelNotFoundException)
-        {
-            string fallback = await FindFlashModelAsync(cancellationToken)
-                              ?? throw new AiException($"\"{model}\" modeli bulunamadı ve kullanılabilir bir Flash modeli yok.");
-            _resolvedModel = fallback;
-            return await SendAsync(fallback, systemPrompt, messages, cancellationToken);
+            (string text, _, _) = await GenerateWithFallbackAsync(systemPrompt, messages, cancellationToken);
+            return text;
         }
         catch (HttpRequestException ex)
         {
             throw new AiException("Gemini'ye bağlanılamadı. İnternet bağlantını kontrol et.", ex);
         }
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new AiException("Gemini 3 dakika içinde yanıt vermedi. Servis yoğun olabilir; biraz sonra tekrar dene.", ex);
-        }
     }
+
+    // Modelleri sırayla dener. Dönen değer: cevap, cevap veren model ve denenen modeller.
+    private async Task<(string Text, string Model, List<string> Tried)> GenerateWithFallbackAsync(
+        string systemPrompt, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+    {
+        var tried = new List<string>();
+        List<string>? candidates = null;
+        string? model = _workingModel ?? _model;
+        Exception? lastError = null;
+
+        while (model is not null && tried.Count < MaxModelAttempts)
+        {
+            tried.Add(model);
+            try
+            {
+                using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                attempt.CancelAfter(AttemptTimeout);
+                string text = await SendAsync(model, systemPrompt, messages, attempt.Token);
+                _workingModel = model;
+                return (text, model, tried);
+            }
+            catch (Exception ex) when (IsRetryableWithAnotherModel(ex, ct))
+            {
+                lastError = ex;
+            }
+
+            candidates ??= await ListCandidateModelsAsync(ct);
+            model = candidates.FirstOrDefault(c => !tried.Contains(c));
+        }
+
+        string triedText = string.Join(", ", tried);
+        throw lastError switch
+        {
+            QuotaExceededForModelException => new AiQuotaExceededException(),
+            OperationCanceledException => new AiException($"Gemini zamanında yanıt vermedi (denenen modeller: {triedText}). Biraz sonra tekrar dene."),
+            ModelNotFoundException => new AiException($"Kullanılabilir bir Gemini modeli bulunamadı (denenen: {triedText})."),
+            ServiceUnavailableException => new AiException($"Gemini modelleri şu an yoğun (denenen: {triedText}). Birkaç dakika sonra tekrar dene."),
+            _ => new AiException("Gemini'den cevap alınamadı.")
+        };
+    }
+
+    // Başka bir modelle tekrar denemeye değer hatalar. Anahtar hatası gibi diğer durumlar doğrudan kullanıcıya gider.
+    private static bool IsRetryableWithAnotherModel(Exception ex, CancellationToken userToken) => ex switch
+    {
+        ModelNotFoundException or ServiceUnavailableException or QuotaExceededForModelException => true,
+        OperationCanceledException => !userToken.IsCancellationRequested,
+        _ => false
+    };
 
     private async Task<string> SendAsync(string model, string systemPrompt, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
     {
@@ -110,7 +152,7 @@ public class GeminiProvider : IAiProvider
         }
 
         if (text.Length == 0)
-            throw new AiException("Gemini boş yanıt döndürdü. Tekrar dene.");
+            throw new ServiceUnavailableException(); // Boş cevap: başka modelle dene.
         if (candidate?.FinishReason == "MAX_TOKENS")
             text.Append(" …");
 
@@ -132,28 +174,26 @@ public class GeminiProvider : IAiProvider
 
         return status switch
         {
-            HttpStatusCode.TooManyRequests => new AiQuotaExceededException(),
+            // Ücretsiz kota model başınadır: bir modelin kotası dolsa da diğerininki dolmamış olabilir.
+            HttpStatusCode.TooManyRequests => new QuotaExceededForModelException(),
             HttpStatusCode.NotFound => new ModelNotFoundException(),
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
                 new AiAuthenticationException("Gemini anahtarı yetkisiz. Anahtarı AI Studio'dan kontrol et."),
             HttpStatusCode.BadRequest when apiMessage?.Contains("API key", StringComparison.OrdinalIgnoreCase) == true =>
                 new AiAuthenticationException("Gemini anahtarı geçersiz. AI Studio'dan kopyaladığın anahtarı tekrar gir."),
-            >= HttpStatusCode.InternalServerError =>
-                new AiException("Gemini şu an yoğun ya da erişilemiyor. Biraz sonra tekrar dene."),
+            >= HttpStatusCode.InternalServerError => new ServiceUnavailableException(),
             _ => new AiException($"Gemini hatası ({(int)status}): {apiMessage ?? "bilinmeyen hata"}")
         };
     }
 
     // Sorunun hangi adımda olduğunu bulmak için adım adım bağlantı testi:
     //   1) Model listesi (anahtar geçerli mi, Google'a ulaşılıyor mu?)  2) Kısa bir deneme cevabı.
-    // Her adımın kendi kısa zaman aşımı var; sonuç kullanıcıya okunur bir metin olarak döner.
     public async Task<string> DiagnoseAsync(CancellationToken cancellationToken = default)
     {
         var report = new StringBuilder();
         var watch = Stopwatch.StartNew();
 
         // 1. adım: model listesi
-        List<string> models;
         try
         {
             using var step = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -165,15 +205,13 @@ public class GeminiProvider : IAiProvider
             if (!response.IsSuccessStatusCode)
             {
                 Exception error = ToException(response.StatusCode, json);
-                return $"1) Google'a ulaşıldı ama istek reddedildi ({(int)response.StatusCode}): {error.Message}";
+                return $"✗ 1) Google'a ulaşıldı ama istek reddedildi ({(int)response.StatusCode}): {error.Message}";
             }
 
-            models = (JsonSerializer.Deserialize<ModelList>(json)?.Models ?? [])
-                .Where(m => m.Methods?.Contains("generateContent") == true)
-                .Select(m => m.Name.Replace("models/", ""))
-                .ToList();
+            int count = (JsonSerializer.Deserialize<ModelList>(json)?.Models ?? [])
+                .Count(m => m.Methods?.Contains("generateContent") == true);
             report.AppendLine($"✓ 1) Google'a bağlanıldı, anahtar geçerli ({watch.Elapsed.TotalSeconds:0.0} sn). " +
-                              $"Kullanılabilir model sayısı: {models.Count}.");
+                              $"Kullanılabilir model sayısı: {count}.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -185,45 +223,19 @@ public class GeminiProvider : IAiProvider
             return $"✗ 1) Google'ın sunucusuna bağlanılamadı: {ex.InnerException?.Message ?? ex.Message}";
         }
 
-        // Hangi model kullanılacak?
-        string model = _resolvedModel ?? _model;
-        if (!models.Contains(model) && model != DefaultModel)
-            report.AppendLine($"! Ayarlanan model ({model}) listede yok.");
-        if (!models.Contains(model))
-        {
-            string? flash = await FindFlashModelAsync(cancellationToken);
-            if (flash is not null)
-            {
-                _resolvedModel = model = flash;
-                report.AppendLine($"  Kullanılacak model: {flash}");
-            }
-        }
-        else
-        {
-            report.AppendLine($"  Kullanılacak model: {model}");
-        }
-
-        // 2. adım: kısa deneme
+        // 2. adım: kısa deneme (gerekirse başka modellere geçerek)
         watch.Restart();
         try
         {
-            using var step = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            step.CancelAfter(TimeSpan.FromSeconds(60));
-            string answer = await SendAsync(model, "Kısa cevap ver.", [new ChatMessage(true, "Sadece 'Bağlantı çalışıyor' yaz.")], step.Token);
-            report.AppendLine($"✓ 2) Model cevap verdi ({watch.Elapsed.TotalSeconds:0.0} sn): \"{answer}\"");
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            report.AppendLine($"✗ 2) {model} modeli 60 saniyede cevap vermedi. Model yoğun olabilir; " +
-                              "appsettings.Local.json'da Ai:GeminiModel alanına başka bir model adı yazmayı dene.");
+            (string answer, string model, List<string> tried) = await GenerateWithFallbackAsync(
+                "Kısa cevap ver.", [new ChatMessage(true, "Sadece 'Bağlantı çalışıyor' yaz.")], cancellationToken);
+            if (tried.Count > 1)
+                report.AppendLine($"  Yoğun/erişilemeyen modeller atlandı: {string.Join(", ", tried.Take(tried.Count - 1))}");
+            report.AppendLine($"✓ 2) {model} cevap verdi ({watch.Elapsed.TotalSeconds:0.0} sn): \"{answer}\"");
         }
         catch (AiException ex)
         {
             report.AppendLine($"✗ 2) Deneme cevabı alınamadı: {ex.Message}");
-        }
-        catch (ModelNotFoundException)
-        {
-            report.AppendLine($"✗ 2) {model} modeli bulunamadı (404).");
         }
         catch (HttpRequestException ex)
         {
@@ -233,32 +245,40 @@ public class GeminiProvider : IAiProvider
         return report.ToString().TrimEnd();
     }
 
-    // Hesabın erişebildiği modellerden metin üretebilen, en güncel "flash" modelini seçer.
-    private async Task<string?> FindFlashModelAsync(CancellationToken ct)
+    // Hesabın erişebildiği, metin üretebilen modelleri tercih sırasıyla döndürür:
+    // önce kararlı Flash modelleri (en yeni önce), sonra önizleme Flash'lar, en son Flash-Lite.
+    private async Task<List<string>> ListCandidateModelsAsync(CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/models?pageSize=200");
-        request.Headers.Add("x-goog-api-key", _apiKey);
-        using HttpResponseMessage response = await SharedHttp.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-            return null;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/models?pageSize=200");
+            request.Headers.Add("x-goog-api-key", _apiKey);
+            using HttpResponseMessage response = await SharedHttp.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+                return new List<string>();
 
-        ModelList? list = await response.Content.ReadFromJsonAsync<ModelList>(ct);
-        string[] excluded = ["lite", "image", "tts", "audio", "live", "embedding", "vision"];
+            ModelList? list = await response.Content.ReadFromJsonAsync<ModelList>(ct);
+            string[] excluded = ["image", "tts", "audio", "live", "embedding", "vision", "latest"];
 
-        var candidates = (list?.Models ?? [])
-            .Where(m => m.Methods?.Contains("generateContent") == true)
-            .Select(m => m.Name.Replace("models/", ""))
-            .Where(n => n.Contains("flash") && !excluded.Any(word => n.Contains(word)))
-            .ToList();
-
-        // Önce kararlı sürümler, sonra önizlemeler; kendi içinde en yeni sürüm önce.
-        return candidates
-            .OrderBy(n => n.Contains("preview") || n.Contains("exp"))
-            .ThenByDescending(n => n, StringComparer.Ordinal)
-            .FirstOrDefault();
+            return (list?.Models ?? [])
+                .Where(m => m.Methods?.Contains("generateContent") == true)
+                .Select(m => m.Name.Replace("models/", ""))
+                .Where(n => n.Contains("flash") && !excluded.Any(word => n.Contains(word)))
+                .OrderBy(n => n.Contains("lite"))
+                .ThenBy(n => n.Contains("preview") || n.Contains("exp"))
+                .ThenByDescending(n => n, StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (HttpRequestException)
+        {
+            return new List<string>();
+        }
     }
 
+    // --- Sadece bu sınıfın içinde kullanılan, "başka modeli dene" anlamına gelen hatalar ---
     private sealed class ModelNotFoundException : Exception;
+    private sealed class ServiceUnavailableException : Exception;
+    private sealed class QuotaExceededForModelException : Exception;
 
     // --- Gemini JSON yanıtlarının C# karşılıkları ---
 
