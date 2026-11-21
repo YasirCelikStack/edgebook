@@ -30,7 +30,9 @@ public class MainForm : XtraForm
 
     public MainForm()
     {
-        Text = "EdgeBook — Trading Journal";
+        // Başlıkta derleme saati: hangi sürümün çalıştığı (eski derleme mi, yeni mi) her zaman görülsün.
+        DateTime built = File.GetLastWriteTime(Application.ExecutablePath.Replace(".exe", ".dll"));
+        Text = $"EdgeBook — Trading Journal   ·   derleme {built:dd.MM HH:mm}";
         ClientSize = new Size(1440, 860);
         MinimumSize = new Size(1150, 700);
         StartPosition = FormStartPosition.CenterScreen;
