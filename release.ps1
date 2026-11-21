@@ -60,7 +60,7 @@ vpk download github --repoUrl $repoUrl --token $env:GITHUB_TOKEN
 if ($LASTEXITCODE -ne 0) { Write-Host 'Önceki sürüm bulunamadı (ilk sürüm olabilir), devam ediliyor.' -ForegroundColor Yellow }
 
 # 4) Paketle: kurulum dosyası + güncelleme paketleri (Releases klasörüne)
-vpk pack --packId $packId --packVersion $Version --packDir publish --mainExe EdgeBook.exe --packTitle EdgeBook --packAuthors 'Yasir Celik' --icon "$PSScriptRoot\TradingJournal.UI\Assets\edgebook.ico"
+vpk pack --packId $packId --packVersion $Version --packDir publish --mainExe EdgeBook.exe --packTitle EdgeBook --packAuthors 'Yasir Celik' --icon "$PSScriptRoot\TradingJournal.UI\Assets\edgebook.ico" --noPortable
 if ($LASTEXITCODE -ne 0) { throw 'Paketleme başarısız.' }
 
 # 5) GitHub'a yükle ve yayınla

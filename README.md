@@ -13,7 +13,7 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 > [!IMPORTANT]
 > **"Windows bilgisayarınızı korudu" uyarısı çıkarsa:** Pencerede **Ek bilgi**'ye, ardından **Yine de çalıştır**'a tıklayın.
 >
-> Bu uyarı EdgeBook'ta bir sorun olduğu anlamına gelmez. Windows SmartScreen, ücretli bir kod imzalama sertifikasıyla imzalanmamış ve henüz az kişinin indirdiği programlarda bu uyarıyı gösterir. EdgeBook bir öğrenci projesidir ve imzasızdır. Kaynak kodun tamamı bu repoda açıktır; kurulum dosyası bu repodaki koddan [release.ps1](release.ps1) ile üretilip [Releases](https://github.com/YasirCelikStack/edgebook/releases) sayfasına yüklenir. Dosyayı yalnızca bu sayfadan indirin.
+> Bu uyarı EdgeBook'ta bir sorun olduğu anlamına gelmez. Windows SmartScreen, ücretli bir kod imzalama sertifikasıyla imzalanmamış ve henüz az kişinin indirdiği programlarda bu uyarıyı gösterir. EdgeBook bir öğrenci projesidir ve imzasızdır. Kaynak kodun tamamı bu repoda açıktır; kurulum dosyası bu repodaki koddan GitHub Actions ile ([release.yml](.github/workflows/release.yml)) üretilip [Releases](https://github.com/YasirCelikStack/edgebook/releases) sayfasına yüklenir. Dosyayı yalnızca bu sayfadan indirin.
 
 ## İndir
 
@@ -91,15 +91,12 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 
 ## Yeni sürüm yayınlama (geliştirici)
 
-Kurulum dosyası ve otomatik güncellemeler [Velopack](https://velopack.io) ile üretilir ve GitHub Releases'a yüklenir.
+Kurulum dosyası ve otomatik güncellemeler [Velopack](https://velopack.io) ile üretilir ve GitHub Releases'a yüklenir. Yayın, GitHub Actions ile GitHub'ın sunucusunda yapılır ([.github/workflows/release.yml](.github/workflows/release.yml)); geliştiricinin bilgisayarından büyük dosya yüklenmez.
 
-1. Bir kez: `dotnet tool install -g vpk`, GitHub'da `edgebook` reposu için **Contents: Read and write** izinli bir fine-grained token oluşturun.
-2. Her sürümde (PowerShell, repo klasöründe):
-   ```powershell
-   $env:GITHUB_TOKEN = "github_pat_..."   # dosyaya yazmayın
-   .\release.ps1 -Version 1.0.1
-   ```
-Betik; `appsettings.Local.json`'da Gemini yedek anahtarı doluysa durur (kurulum paketine girmesin), uygulamayı self-contained derler, `vpk pack` ile kurulum ve güncelleme paketlerini üretir ve `vpk upload github` ile yayınlar. Paket kimliği `EdgeBookApp`tir; uygulama `%LocalAppData%\EdgeBookApp` altına kurulur, veriler ayrı klasörde (`%LocalAppData%\EdgeBook`) kalır.
+1. Bir kez: repoda **Settings → Secrets and variables → Actions** altına `DEVEXPRESS_NUGET_KEY`, `CHARTVAULT_SUPABASE_URL` ve `CHARTVAULT_PUBLISHABLE_KEY` secret'larını ekleyin.
+2. Her sürümde: **Actions → Yeni sürüm yayınla → Run workflow**, sürüm numarasını yazın (ör. `1.0.2`) ve çalıştırın.
+
+İş akışı uygulamayı self-contained derler, `vpk pack` ile kurulum ve güncelleme paketlerini üretir ve `vpk upload github` ile yayınlar. Gemini anahtarı pakete hiçbir zaman konmaz. Paket kimliği `EdgeBookApp`tir; uygulama `%LocalAppData%\EdgeBookApp` altına kurulur, veriler ayrı klasörde (`%LocalAppData%\EdgeBook`) kalır. Aynı işi yerel olarak yapan [release.ps1](release.ps1) betiği de yedek olarak durur.
 
 ## Örnek veri
 

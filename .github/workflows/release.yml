@@ -1,0 +1,103 @@
+# EdgeBook yeni sürüm yayınlama — GitHub'ın sunucusunda çalışır, senin internetini kullanmaz.
+#
+# Kullanım: GitHub > Actions > "Yeni sürüm yayınla" > Run workflow > sürüm numarasını yaz (ör. 1.0.1) > Run.
+#
+# Bir kez tanımlanacak secret'lar (Settings > Secrets and variables > Actions > New repository secret):
+#   DEVEXPRESS_NUGET_KEY        DevExpress NuGet feed anahtarı (https://nuget.devexpress.com > Obtain Feed URL;
+#                               adresteki nuget.devexpress.com/  ile  /api  arasındaki kısım)
+#   CHARTVAULT_SUPABASE_URL     appsettings.Local.json'daki ChartVault.SupabaseUrl
+#   CHARTVAULT_PUBLISHABLE_KEY  appsettings.Local.json'daki ChartVault.PublishableKey
+# GITHUB_TOKEN'ı GitHub kendisi verir; token oluşturmana gerek yok.
+
+name: Yeni sürüm yayınla
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Yeni sürüm numarası (ör. 1.0.1)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  REPO_URL: https://github.com/${{ github.repository }}
+  PACK_ID: EdgeBookApp   # Kurulum klasörü %LocalAppData%\EdgeBookApp; veritabanı ayrı (%LocalAppData%\EdgeBook).
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Sürüm numarasını kontrol et
+        shell: pwsh
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "Sürüm 1.0.1 biçiminde olmalı (yazılan: $env:VERSION)." }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: DevExpress NuGet kaynağını ekle
+        shell: pwsh
+        env:
+          DX_KEY: ${{ secrets.DEVEXPRESS_NUGET_KEY }}
+        run: |
+          if (-not $env:DX_KEY) { throw "DEVEXPRESS_NUGET_KEY secret'ı tanımlı değil." }
+          dotnet nuget add source "https://nuget.devexpress.com/$($env:DX_KEY)/api/v3/index.json" --name DevExpress
+
+      - name: Chart Vault bağlantı ayarlarını yaz (appsettings.Local.json)
+        shell: pwsh
+        env:
+          CV_URL: ${{ secrets.CHARTVAULT_SUPABASE_URL }}
+          CV_KEY: ${{ secrets.CHARTVAULT_PUBLISHABLE_KEY }}
+        run: |
+          if (-not $env:CV_URL -or -not $env:CV_KEY) { throw "CHARTVAULT_SUPABASE_URL / CHARTVAULT_PUBLISHABLE_KEY secret'ları tanımlı değil." }
+          # Gemini anahtarı bilerek BOŞ: dağıtılan pakete kimsenin anahtarı girmez, kullanıcı kendi anahtarını girer.
+          $settings = [ordered]@{
+            ChartVault = [ordered]@{ SupabaseUrl = $env:CV_URL; PublishableKey = $env:CV_KEY; SiteUrl = "https://chart-vault-mu.vercel.app" }
+            Ai         = [ordered]@{ GeminiApiKey = ""; GeminiModel = "" }
+          }
+          $settings | ConvertTo-Json -Depth 3 | Set-Content TradingJournal.UI/appsettings.Local.json -Encoding utf8
+
+      - name: Derle (self-contained, win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish TradingJournal.UI/TradingJournal.UI.csproj -c Release -r win-x64 --self-contained true -p:Version=$env:VERSION -o publish
+          if ($LASTEXITCODE -ne 0) { throw "Derleme başarısız." }
+
+      - name: vpk aracını kur
+        shell: pwsh
+        run: dotnet tool install -g vpk
+
+      - name: Önceki sürümü indir (delta güncelleme paketi için)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          vpk download github --repoUrl $env:REPO_URL --token $env:GH_TOKEN
+          if ($LASTEXITCODE -ne 0) { Write-Host "Önceki sürüm bulunamadı, delta paketi olmadan devam ediliyor." }
+          $global:LASTEXITCODE = 0
+
+      - name: Paketle (kurulum dosyası + güncelleme paketleri)
+        shell: pwsh
+        run: |
+          vpk pack --packId $env:PACK_ID --packVersion $env:VERSION --packDir publish --mainExe EdgeBook.exe `
+            --packTitle EdgeBook --packAuthors "Yasir Celik" --icon TradingJournal.UI/Assets/edgebook.ico --noPortable
+          if ($LASTEXITCODE -ne 0) { throw "Paketleme başarısız." }
+
+      - name: GitHub Releases'a yükle ve yayınla
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          vpk upload github --repoUrl $env:REPO_URL --token $env:GH_TOKEN --publish `
+            --releaseName "EdgeBook $env:VERSION" --tag "v$env:VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "GitHub yüklemesi başarısız." }
