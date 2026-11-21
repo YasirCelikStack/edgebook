@@ -32,8 +32,39 @@ public class GeminiProvider : IAiProvider
     // Model bu ayarı tanımazsa (400) bir daha gönderilmez.
     private static bool _thinkingConfigUnsupported;
 
-    // Son başarılı model: uygulama açık kaldıkça önce bu denenir.
-    private static string? _workingModel;
+    // Son başarılı model: önce bu denenir. Diske de yazılır ki uygulama yeniden açılınca
+    // yoğun modelleri tek tek deneyip dakikalarca beklenmesin.
+    private static string? _workingModel = LoadWorkingModel();
+
+    private static string WorkingModelFile => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeBook", "gemini-model.txt");
+
+    private static string? LoadWorkingModel()
+    {
+        try
+        {
+            return File.Exists(WorkingModelFile) ? File.ReadAllText(WorkingModelFile).Trim() is { Length: > 0 } m ? m : null : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    private static void RememberWorkingModel(string model)
+    {
+        if (_workingModel == model) return;
+        _workingModel = model;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(WorkingModelFile)!);
+            File.WriteAllText(WorkingModelFile, model);
+        }
+        catch (IOException)
+        {
+            // Kaydedilemezse sadece bu oturumda hatırlanır.
+        }
+    }
 
     private readonly string _apiKey;
     private readonly string _model;
@@ -88,7 +119,7 @@ public class GeminiProvider : IAiProvider
                     using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     attempt.CancelAfter(AttemptTimeout);
                     string text = await SendAsync(model, systemPrompt, messages, attempt.Token);
-                    _workingModel = model;
+                    RememberWorkingModel(model);
                     return (text, model, tried);
                 }
                 catch (QuotaExceededForModelException quota) when (!quota.IsDaily && retries == 0 && quota.RetryAfter <= MaxRetryWait)
