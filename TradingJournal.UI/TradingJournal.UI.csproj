@@ -14,7 +14,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyTitle>EdgeBook</AssemblyTitle>
     <!-- Bilgisayarında kurulu DevExpress sürümü (Visual Studio > Extensions > DevExpress > About). -->
-    <DevExpressVersion>26.1.*</DevExpressVersion>
+    <DevExpressVersion>26.1.5</DevExpressVersion>
   </PropertyGroup>
 
   <ItemGroup>
