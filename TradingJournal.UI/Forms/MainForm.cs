@@ -151,9 +151,12 @@ public class MainForm : XtraForm
 
         _loadingAccounts = true;
         _accountPicker.Properties.Items.Clear();
-        _accountPicker.Properties.Items.Add(new ImageComboBoxItem("Tüm hesaplar", -1));
+        // DİKKAT: new ImageComboBoxItem("metin", sayı) yazılırsa sayı "değer" değil "ikon numarası" olarak
+        // anlaşılıyor (DevExpress'in (string, int imageIndex) kurucusu). Değer boş kalınca seçim hiçbir şeyi
+        // değiştirmiyordu. Bu yüzden Description ve Value açıkça atanıyor.
+        _accountPicker.Properties.Items.Add(new ImageComboBoxItem { Description = "Tüm hesaplar", Value = -1 });
         foreach (Account account in accounts)
-            _accountPicker.Properties.Items.Add(new ImageComboBoxItem($"{account.Name} · {account.Type}", account.Id));
+            _accountPicker.Properties.Items.Add(new ImageComboBoxItem { Description = $"{account.Name} · {account.Type}", Value = account.Id });
 
         bool stillExists = _state.AccountId is int id && accounts.Any(a => a.Id == id);
         _accountPicker.EditValue = stillExists ? _state.AccountId!.Value : -1;

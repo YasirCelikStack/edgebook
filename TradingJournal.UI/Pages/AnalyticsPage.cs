@@ -93,6 +93,9 @@ public class AnalyticsPage : PageBase
 
     private void ConfigurePivot()
     {
+        // Alanlar DataSourceColumnBinding ile bağlanıyor; bu bağlama sadece Optimized veri motorunda
+        // kesin çalışır. Eski (Legacy) motor seçili kalırsa alanlar veriyi göremez ve tablo 0 gösterir.
+        _pivot.OptionsData.DataProcessingEngine = PivotDataProcessingEngine.Optimized;
         _pivot.OptionsView.ShowFilterHeaders = false;
         _pivot.OptionsView.ShowColumnGrandTotals = true;
         _pivot.OptionsView.ShowRowGrandTotals = true;
