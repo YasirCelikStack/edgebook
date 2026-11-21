@@ -99,7 +99,7 @@ public class AnalyticsPage : PageBase
         _pivot.OptionsCustomization.AllowFilter = true;
 
         // Pozitif sonuçlar yeşil, negatifler kırmızı; win rate %50 üstü yeşil.
-        _pivot.CustomCellAppearance += (_, e) =>
+        _pivot.CustomAppearance += (_, e) =>
         {
             string? key = PivotFieldCatalog.KeyOf(e.DataField);
             if (key is null || e.Value is null) return;
