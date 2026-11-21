@@ -29,8 +29,10 @@ public class AppSettings
         // Chart Vault'un Supabase "publishable" anahtarı (sb_publishable_...).
         public string PublishableKey { get; set; } = string.Empty;
 
-        // Chart Vault sitesinin adresi (https://...): görsel uç noktası (/api/journal/shots) burada.
-        public string SiteUrl { get; set; } = string.Empty;
+        // Chart Vault sitesinin adresi: görsel uç noktası (/api/journal/shots) burada.
+        // Gizli bir bilgi olmadığı için varsayılan olarak kodda; appsettings.Local.json'da yazılırsa o kullanılır.
+        public const string DefaultSiteUrl = "https://chart-vault-mu.vercel.app";
+        public string SiteUrl { get; set; } = DefaultSiteUrl;
 
         public bool IsSiteConfigured =>
             SiteUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && !SiteUrl.Contains("BURAYA");
