@@ -15,15 +15,17 @@ namespace TradingJournal.Services.Ai;
 // (en fazla 3 model). Cevap veren model hatırlanır, sonraki isteklerde önce o kullanılır.
 public class GeminiProvider : IAiProvider
 {
-    // Ücretsiz katmanda kotası olan model (AI Studio > Rate limit sayfasında görünür).
-    // Bulunamazsa (404) hesabın erişebildiği en güncel Flash modeli otomatik seçilir.
-    public const string DefaultModel = "gemini-3.8-flash";
+    // Varsayılan model: 21 Kasım'da ücretsiz katmanda cevap veren model (3.8 ve 3.7 o gün yoğundu).
+    // Yoğunsa ya da bulunamazsa hesabın erişebildiği diğer Flash modelleri sırayla denenir;
+    // cevap veren model diske kaydedilir ve sonraki açılışlarda önce o kullanılır.
+    public const string DefaultModel = "gemini-3.6-flash";
 
     // Dakikalık sınıra takılınca Gemini'nin söylediği süre bu kadar ya da daha kısaysa beklenip tekrar denenir.
     private static readonly TimeSpan MaxRetryWait = TimeSpan.FromSeconds(40);
     private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta";
     private const int MaxModelAttempts = 3;
-    private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(75);
+    private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan TestAttemptTimeout = TimeSpan.FromSeconds(20);
 
     private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(180) };
 
@@ -94,11 +96,12 @@ public class GeminiProvider : IAiProvider
     }
 
     // Modelleri sırayla dener. Dönen değer: cevap, cevap veren model ve denenen modeller.
-    // Önce ana model denenir; "yoğun" (5xx) veya zaman aşımında kısa beklemelerle aynı model 2 kez daha denenir
-    // (bu hatalar genelde birkaç saniyede geçer). Ancak model hiç yoksa ya da tamamen başarısızsa başka modele geçilir.
+    // Bir model yoğunsa (5xx), zaman aşımına uğrarsa, bulunamazsa veya kotası yoksa beklemeden sıradakine geçilir.
+    // Tek istisna dakikalık sınır: Gemini'nin söylediği süre kısaysa aynı model bir kez daha denenir.
     private async Task<(string Text, string Model, List<string> Tried)> GenerateWithFallbackAsync(
-        string systemPrompt, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+        string systemPrompt, IReadOnlyList<ChatMessage> messages, CancellationToken ct, TimeSpan? attemptTimeout = null)
     {
+        TimeSpan timeout = attemptTimeout ?? AttemptTimeout;
         var tried = new List<string>();
         var errors = new List<string>();     // Kullanıcıya gösterilecek: her model ne cevap verdi.
         List<string>? candidates = null;
@@ -109,7 +112,6 @@ public class GeminiProvider : IAiProvider
         while (model is not null && tried.Count < MaxModelAttempts)
         {
             tried.Add(model);
-            bool isMainModel = tried.Count == 1;
             int retries = 0;
 
             while (true)
@@ -117,7 +119,7 @@ public class GeminiProvider : IAiProvider
                 try
                 {
                     using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    attempt.CancelAfter(AttemptTimeout);
+                    attempt.CancelAfter(timeout);
                     string text = await SendAsync(model, systemPrompt, messages, attempt.Token);
                     RememberWorkingModel(model);
                     return (text, model, tried);
@@ -127,12 +129,6 @@ public class GeminiProvider : IAiProvider
                     // Dakikalık sınır: söylenen süre kadar bekleyip aynı modeli bir kez daha dene.
                     retries++;
                     await Task.Delay(quota.RetryAfter + TimeSpan.FromSeconds(1), ct);
-                }
-                catch (Exception ex) when (isMainModel && retries < 2 && IsTransient(ex, ct))
-                {
-                    // Ana model geçici olarak yoğun / yavaş: 3 sn, sonra 8 sn bekleyip tekrar dene.
-                    retries++;
-                    await Task.Delay(TimeSpan.FromSeconds(retries == 1 ? 3 : 8), ct);
                 }
                 catch (Exception ex) when (IsRetryableWithAnotherModel(ex, ct))
                 {
@@ -163,15 +159,8 @@ public class GeminiProvider : IAiProvider
         QuotaExceededForModelException q => (q.IsDaily ? "kota yok / günlük kota doldu" : "dakikalık sınır") + $" [{q.Detail}]",
         ServiceUnavailableException u => $"yoğun / sunucu hatası ({u.StatusCode})",
         ModelNotFoundException => "model bulunamadı (404)",
-        OperationCanceledException => $"{AttemptTimeout.TotalSeconds:0} sn'de cevap vermedi",
+        OperationCanceledException => "zamanında cevap vermedi",
         _ => ex.Message
-    };
-
-    private static bool IsTransient(Exception ex, CancellationToken userToken) => ex switch
-    {
-        ServiceUnavailableException => true,
-        OperationCanceledException => !userToken.IsCancellationRequested,
-        _ => false
     };
 
     // Başka bir modelle tekrar denemeye değer hatalar. Anahtar hatası gibi diğer durumlar doğrudan kullanıcıya gider.
@@ -306,7 +295,7 @@ public class GeminiProvider : IAiProvider
         try
         {
             (string answer, string model, List<string> tried) = await GenerateWithFallbackAsync(
-                "Kısa cevap ver.", [new ChatMessage(true, "Sadece 'Bağlantı çalışıyor' yaz.")], cancellationToken);
+                "Kısa cevap ver.", [new ChatMessage(true, "Sadece 'Bağlantı çalışıyor' yaz.")], cancellationToken, TestAttemptTimeout);
             if (tried.Count > 1)
                 report.AppendLine($"  Yoğun/erişilemeyen modeller atlandı: {string.Join(", ", tried.Take(tried.Count - 1))}");
             report.AppendLine($"✓ 2) {model} cevap verdi ({watch.Elapsed.TotalSeconds:0.0} sn): \"{answer}\"");
