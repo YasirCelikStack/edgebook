@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using DevExpress.Data;
 using DevExpress.Utils;
+using DevExpress.XtraEditors.Controls;
+using DevExpress.XtraEditors.Repository;
 using DevExpress.XtraGrid;
 using DevExpress.XtraGrid.Columns;
 using DevExpress.XtraGrid.Views.Grid;
@@ -31,7 +33,12 @@ public class TradesPage : PageBase
     private readonly FlatButton _closedButton = new("Kapalı");
     private readonly FlatButton _dateChip = new("", Theme.Glyph.Calendar) { Visible = false };
 
+    private const string ThumbField = "Thumb";
+
     private Dictionary<int, Trade> _tradesById = new();
+
+    // Küçük resimler bir kez üretilip saklanır (her çizimde diskten okunmasın).
+    private readonly Dictionary<string, Image?> _thumbCache = new();
     private StatusFilter _status = StatusFilter.All;
     private DateTime? _dayFilter;
 
@@ -80,11 +87,27 @@ public class TradesPage : PageBase
         _view.OptionsFind.AlwaysVisible = true;
         _view.OptionsFind.FindNullPrompt = "Sembol, strateji, etiket ara...";
         _view.OptionsSelection.EnableAppearanceFocusedCell = false;
-        _view.RowHeight = 38;
+        _view.RowHeight = 58;
         _view.Appearance.Row.BackColor = Theme.Card;
         _view.Appearance.Empty.BackColor = Theme.Card;
         _view.Appearance.FooterPanel.BackColor = Theme.Card;
         _view.Appearance.HeaderPanel.ForeColor = Theme.TextMuted;
+
+        // İlk sütun: chart ekran görüntüsünün küçük resmi. Tıklayınca büyük açılır.
+        var picture = new RepositoryItemPictureEdit
+        {
+            SizeMode = PictureSizeMode.Zoom,
+            NullText = " ",
+            ShowMenu = false
+        };
+        _grid.RepositoryItems.Add(picture);
+        GridColumn thumb = _view.Columns.AddVisible(ThumbField, "Görsel");
+        thumb.UnboundDataType = typeof(Image);
+        thumb.ColumnEdit = picture;
+        thumb.Width = 96;
+        thumb.OptionsColumn.AllowSort = DefaultBoolean.False;
+        thumb.OptionsColumn.AllowGroup = DefaultBoolean.False;
+        thumb.OptionsFilter.AllowFilter = false;
 
         AddDateColumn(nameof(TradeRow.OpenTime), "Tarih", 110);
         GridColumn symbol = AddColumn(nameof(TradeRow.Symbol), "Sembol", 80);
@@ -152,6 +175,22 @@ public class TradesPage : PageBase
             e.Handled = true;
         };
 
+        _view.CustomUnboundColumnData += (_, e) =>
+        {
+            if (e.IsGetData && e.Column.FieldName == ThumbField && e.Row is TradeRow { ThumbnailPath: string path })
+                e.Value = GetThumbnail(path);
+        };
+
+        // Küçük resme tıklayınca ekran görüntüsü tam boyutta açılır.
+        _view.RowCellClick += (_, e) =>
+        {
+            if (e.Column.FieldName != ThumbField || _view.GetRow(e.RowHandle) is not TradeRow { ThumbnailPath: string path } row)
+                return;
+            if (!File.Exists(path)) return;
+            using var viewer = new Forms.ImageViewerForm(path, $"{row.Symbol} · {row.OpenTime:dd.MM.yyyy HH:mm}");
+            viewer.ShowDialog(FindForm());
+        };
+
         _view.FocusedRowChanged += async (_, _) => await ShowFocusedAsync();
         _view.DoubleClick += async (_, _) => { if (FocusedRow is TradeRow row) await EditTradeAsync(row.Id); };
     }
@@ -175,6 +214,16 @@ public class TradesPage : PageBase
         column.DisplayFormat.FormatString = "dd.MM.yy HH:mm";
     }
 
+    private Image? GetThumbnail(string path)
+    {
+        if (!_thumbCache.TryGetValue(path, out Image? image))
+        {
+            image = ImageHelper.LoadThumbnail(path, 192, 112);
+            _thumbCache[path] = image;
+        }
+        return image;
+    }
+
     private TradeRow? FocusedRow => _view.GetFocusedRow() as TradeRow;
 
     public override async Task RefreshAsync()
@@ -183,12 +232,15 @@ public class TradesPage : PageBase
 
         List<Trade> trades = await State.LoadTradesAsync();
         Dictionary<int, int> shotCounts = await State.LoadScreenshotCountsAsync();
+        Dictionary<int, TradeScreenshot> firstShots = await State.LoadFirstScreenshotsAsync();
         _tradesById = trades.ToDictionary(t => t.Id);
 
         _grid.DataSource = trades.Select(t =>
         {
             TradeRow row = TradeRow.From(t);
             row.ScreenshotCount = shotCounts.GetValueOrDefault(t.Id);
+            if (firstShots.TryGetValue(t.Id, out TradeScreenshot? shot))
+                row.ThumbnailPath = ScreenshotService.GetFullPath(shot);
             return row;
         }).ToList();
 

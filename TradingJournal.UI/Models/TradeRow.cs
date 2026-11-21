@@ -32,6 +32,9 @@ public class TradeRow
     public string Tags { get; init; } = string.Empty;
     public int? Rating { get; init; }
     public int ScreenshotCount { get; set; }
+
+    // İlk ekran görüntüsünün tam dosya yolu (yoksa null). Listede küçük resim olarak gösterilir.
+    public string? ThumbnailPath { get; set; }
     public string DirectionText => Direction == TradeDirection.Long ? "▲ Long" : "▼ Short";
     public string Stars => Rating is int r ? new string('★', r) : string.Empty;
 

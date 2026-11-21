@@ -45,4 +45,13 @@ public class AppState
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count);
     }
+
+    // Her işlemin ilk eklenen ekran görüntüsü (listede önizleme olarak gösterilir).
+    public async Task<Dictionary<int, TradeScreenshot>> LoadFirstScreenshotsAsync()
+    {
+        using var db = DbContextFactory.Create();
+        List<TradeScreenshot> all = await db.TradeScreenshots.AsNoTracking().ToListAsync();
+        return all.GroupBy(s => s.TradeId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(s => s.CreatedAt).First());
+    }
 }

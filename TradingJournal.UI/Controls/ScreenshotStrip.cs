@@ -58,26 +58,8 @@ public class ScreenshotStrip : FlowLayoutPanel
         return Math.Max(1, rows) * (TileHeight + 8);
     }
 
-    // Resmi kilitlemeden küçültülmüş kopyasını oluşturur (orijinal dosya silinebilsin diye).
     private static Image? LoadThumbnail(string path)
-    {
-        try
-        {
-            using FileStream stream = File.OpenRead(path);
-            using Image original = Image.FromStream(stream);
-            double scale = Math.Min(TileWidth * 2.0 / original.Width, TileHeight * 2.0 / original.Height);
-            scale = Math.Min(scale, 1);
-            var thumb = new Bitmap(Math.Max(1, (int)(original.Width * scale)), Math.Max(1, (int)(original.Height * scale)));
-            using Graphics g = Graphics.FromImage(thumb);
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.DrawImage(original, 0, 0, thumb.Width, thumb.Height);
-            return thumb;
-        }
-        catch (Exception)
-        {
-            return null; // Dosya silinmiş ya da bozuk: kutuda uyarı gösterilir.
-        }
-    }
+        => Helpers.ImageHelper.LoadThumbnail(path, TileWidth * 2, TileHeight * 2);
 
     [DesignerCategory("Code")]
     private class ThumbTile : Control
