@@ -56,6 +56,14 @@ public static class SessionClassifier
         return TimeZoneInfo.ConvertTime(source, NewYorkZone);
     }
 
+    // New York saatini bilgisayarın yerel saatine (Türkiye) çevirir. Örnek veri üretirken kullanılır.
+    public static DateTime FromNewYorkTime(DateTime newYorkTime)
+    {
+        DateTime local = TimeZoneInfo.ConvertTime(
+            DateTime.SpecifyKind(newYorkTime, DateTimeKind.Unspecified), NewYorkZone, TimeZoneInfo.Local);
+        return DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+    }
+
     private static int MinuteOfDay(DateTime time)
     {
         DateTime ny = ToNewYorkTime(time);

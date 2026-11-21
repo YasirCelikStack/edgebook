@@ -56,6 +56,10 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **Analiz:** DevExpress `PivotGridControl` ile çapraz tablolar. Hazır analizler: Seans × Yön, Sembol × Seans × Yön (ör. "Asya'da EURUSD Long işlemlerin başarı oranı"), Killzone, Gün × Saat, İşlemde kalma süresi, Risk büyüklüğü, Strateji, Aylık. Alanlar sürükle-bırak ile değiştirilebilir, tablo Excel'e aktarılabilir. Sağ panelde davranış istatistikleri (işlemde kalma süresi, ortalama risk, planlanan RR, seriler) ve en güçlü / en zayıf sembol-seans-yön kombinasyonları. Seanslar New York saatine göre, yaz/kış saati farkı dahil dakika hassasiyetinde hesaplanır.
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
 
+## Örnek veri
+
+**Tanımlar → Örnek veri oluştur** ayrı bir "Demo Prop Hesap (örnek veri)" hesabına son 4 aya yayılmış ~180 işlem ekler (`TradingJournal.Services/Demo/DemoDataGenerator`). Veriye bilinçli örüntüler gizlenmiştir (Londra Long işlemleri güçlü, NY öğleden sonra Short ve Cuma zayıf, FOMO/Revenge zararlı, kazananlar erken kapatılıyor); analiz ekranları ve yapay zeka koçu bunları bulabilmelidir. **Örnek verileri sil** hepsini kaldırır, kullanıcının kendi verisine dokunmaz.
+
 ## Chart Vault entegrasyonu
 
 **Chart Vault** sayfası, Chart Vault web uygulamasının Journal kayıtlarını Supabase REST API'si üzerinden okur ve EdgeBook'a aktarır (`TradingJournal.Services/Import`).
