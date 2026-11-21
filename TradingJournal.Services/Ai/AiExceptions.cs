@@ -11,11 +11,15 @@ public class AiException : Exception
 // Günlük / dakikalık ücretsiz kota doldu (HTTP 429).
 public class AiQuotaExceededException : AiException
 {
-    public AiQuotaExceededException()
-        : base("Yapay zeka kullanım hakkı şimdilik doldu. Dakikalık sınırsa biraz bekleyip tekrar dene; " +
-               "günlük sınırsa kota Türkiye saatiyle sabah 10-11 civarında yenilenir.")
+    public AiQuotaExceededException(bool daily)
+        : base(daily
+            ? "Bugünkü ücretsiz yapay zeka hakkın doldu. Kota Türkiye saatiyle sabah 10-11 civarında yenilenir."
+            : "Dakikalık istek sınırına takıldın (ücretsiz katmanda dakikada birkaç istek). 1 dakika bekleyip tekrar dene.")
     {
+        IsDaily = daily;
     }
+
+    public bool IsDaily { get; }
 }
 
 // Anahtar yok, geçersiz ya da yetkisiz (HTTP 400/401/403).

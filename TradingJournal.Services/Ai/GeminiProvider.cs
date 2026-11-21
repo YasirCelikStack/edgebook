@@ -15,7 +15,12 @@ namespace TradingJournal.Services.Ai;
 // (en fazla 3 model). Cevap veren model hatırlanır, sonraki isteklerde önce o kullanılır.
 public class GeminiProvider : IAiProvider
 {
-    public const string DefaultModel = "gemini-flash-latest";
+    // Ücretsiz katmanda kotası olan model (AI Studio > Rate limit sayfasında görünür).
+    // Bulunamazsa (404) hesabın erişebildiği en güncel Flash modeli otomatik seçilir.
+    public const string DefaultModel = "gemini-3.8-flash";
+
+    // Dakikalık sınıra takılınca Gemini'nin söylediği süre bu kadar ya da daha kısaysa beklenip tekrar denenir.
+    private static readonly TimeSpan MaxRetryWait = TimeSpan.FromSeconds(40);
     private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta";
     private const int MaxModelAttempts = 3;
     private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(75);
@@ -66,9 +71,12 @@ public class GeminiProvider : IAiProvider
         string? model = _workingModel ?? _model;
         Exception? lastError = null;
 
+        bool waitedForRateLimit = false;
+
         while (model is not null && tried.Count < MaxModelAttempts)
         {
-            tried.Add(model);
+            if (!tried.Contains(model))
+                tried.Add(model);
             try
             {
                 using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -76,6 +84,16 @@ public class GeminiProvider : IAiProvider
                 string text = await SendAsync(model, systemPrompt, messages, attempt.Token);
                 _workingModel = model;
                 return (text, model, tried);
+            }
+            catch (QuotaExceededForModelException quota) when (!quota.IsDaily)
+            {
+                // Dakikalık sınır: başka modele geçmek yerine (onların ücretsiz hakkı olmayabilir)
+                // Gemini'nin söylediği kadar bekleyip aynı modeli bir kez daha dene.
+                if (waitedForRateLimit || quota.RetryAfter > MaxRetryWait)
+                    throw new AiQuotaExceededException(daily: false);
+                waitedForRateLimit = true;
+                await Task.Delay(quota.RetryAfter + TimeSpan.FromSeconds(1), ct);
+                continue;
             }
             catch (Exception ex) when (IsRetryableWithAnotherModel(ex, ct))
             {
@@ -89,7 +107,7 @@ public class GeminiProvider : IAiProvider
         string triedText = string.Join(", ", tried);
         throw lastError switch
         {
-            QuotaExceededForModelException => new AiQuotaExceededException(),
+            QuotaExceededForModelException => new AiQuotaExceededException(daily: true),
             OperationCanceledException => new AiException($"Gemini zamanında yanıt vermedi (denenen modeller: {triedText}). Biraz sonra tekrar dene."),
             ModelNotFoundException => new AiException($"Kullanılabilir bir Gemini modeli bulunamadı (denenen: {triedText})."),
             ServiceUnavailableException => new AiException($"Gemini modelleri şu an yoğun (denenen: {triedText}). Birkaç dakika sonra tekrar dene."),
@@ -174,8 +192,9 @@ public class GeminiProvider : IAiProvider
 
         return status switch
         {
-            // Ücretsiz kota model başınadır: bir modelin kotası dolsa da diğerininki dolmamış olabilir.
-            HttpStatusCode.TooManyRequests => new QuotaExceededForModelException(),
+            // Ücretsiz kota model başınadır. Günlük sınır dolduysa başka model denenebilir;
+            // dakikalık sınırsa kısa bir beklemeden sonra aynı model tekrar denenir.
+            HttpStatusCode.TooManyRequests => ParseQuota(json, apiMessage),
             HttpStatusCode.NotFound => new ModelNotFoundException(),
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
                 new AiAuthenticationException("Gemini anahtarı yetkisiz. Anahtarı AI Studio'dan kontrol et."),
@@ -275,10 +294,46 @@ public class GeminiProvider : IAiProvider
         }
     }
 
-    // --- Sadece bu sınıfın içinde kullanılan, "başka modeli dene" anlamına gelen hatalar ---
+    // 429 cevabından sınırın günlük mü dakikalık mı olduğunu ve ne kadar beklenmesi gerektiğini çıkarır.
+    // Örnek: error.message "...GenerateRequestsPerDayPerProjectPerModel-FreeTier..." ve details[].retryDelay "17s"
+    private static QuotaExceededForModelException ParseQuota(string json, string? apiMessage)
+    {
+        bool daily = json.Contains("PerDay", StringComparison.OrdinalIgnoreCase)
+                     || apiMessage?.Contains("per day", StringComparison.OrdinalIgnoreCase) == true;
+
+        TimeSpan retryAfter = TimeSpan.FromSeconds(20);
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(json);
+            if (doc.RootElement.GetProperty("error").TryGetProperty("details", out JsonElement details))
+            {
+                foreach (JsonElement detail in details.EnumerateArray())
+                {
+                    if (detail.TryGetProperty("retryDelay", out JsonElement delay)
+                        && delay.GetString() is string text
+                        && double.TryParse(text.TrimEnd('s'), System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out double seconds))
+                        retryAfter = TimeSpan.FromSeconds(seconds);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Ayrıntı yoksa varsayılan bekleme süresi kullanılır.
+        }
+
+        return new QuotaExceededForModelException(daily, retryAfter);
+    }
+
+    // --- Sadece bu sınıfın içinde kullanılan, "başka modeli dene / bekle" anlamına gelen hatalar ---
     private sealed class ModelNotFoundException : Exception;
     private sealed class ServiceUnavailableException : Exception;
-    private sealed class QuotaExceededForModelException : Exception;
+
+    private sealed class QuotaExceededForModelException(bool isDaily, TimeSpan retryAfter) : Exception
+    {
+        public bool IsDaily { get; } = isDaily;
+        public TimeSpan RetryAfter { get; } = retryAfter;
+    }
 
     // --- Gemini JSON yanıtlarının C# karşılıkları ---
 
