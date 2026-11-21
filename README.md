@@ -8,6 +8,11 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 
 İndirdiğiniz `EdgeBookApp-win-Setup.exe` dosyasını çalıştırmanız yeterli. Uygulama kendini otomatik günceller. Ayrıntılar aşağıdaki [İndir](#i̇ndir) bölümünde.
 
+> [!IMPORTANT]
+> **"Windows bilgisayarınızı korudu" uyarısı çıkarsa:** Pencerede **Ek bilgi**'ye, ardından **Yine de çalıştır**'a tıklayın.
+>
+> Bu uyarı EdgeBook'ta bir sorun olduğu anlamına gelmez. Windows SmartScreen, ücretli bir kod imzalama sertifikasıyla imzalanmamış ve henüz az kişinin indirdiği programlarda bu uyarıyı gösterir. EdgeBook bir öğrenci projesidir ve imzasızdır. Kaynak kodun tamamı bu repoda açıktır; kurulum dosyası bu repodaki koddan [release.ps1](release.ps1) ile üretilip [Releases](https://github.com/YasirCelikStack/edgebook/releases) sayfasına yüklenir. Dosyayı yalnızca bu sayfadan indirin.
+
 ## İndir
 
 **[Kurulum dosyasını indir](https://github.com/YasirCelikStack/edgebook/releases/latest/download/EdgeBookApp-win-Setup.exe)** (her zaman en son sürüm) ya da **[Releases](https://github.com/YasirCelikStack/edgebook/releases/latest)** sayfasından `EdgeBookApp-win-Setup.exe` dosyasını indirip çalıştırın. .NET kurmanıza gerek yoktur.
@@ -15,7 +20,7 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 - Kurulumdan sonra EdgeBook, Başlat menüsünden açılır.
 - **Güncellemeler otomatiktir:** Yeni sürüm yayınlanınca uygulama açılışta üstte bir şerit gösterir; "Şimdi güncelle"ye basınca yeni sürüm indirilir ve uygulama yeniden başlar. Sol alttaki sürüm yazısına tıklayarak da güncellemeleri denetleyebilirsiniz.
 - Verileriniz (`%LocalAppData%\EdgeBook`) güncellemelerden ve kaldırmadan etkilenmez.
-- İmzasız bir uygulama olduğu için Windows ilk açılışta "Windows bilgisayarınızı korudu" uyarısı gösterebilir: **Ek bilgi → Yine de çalıştır**.
+- İmzasız bir uygulama olduğu için Windows ilk kurulumda "Windows bilgisayarınızı korudu" uyarısı gösterebilir: **Ek bilgi → Yine de çalıştır** (açıklaması sayfanın başında).
 - Yapay zeka koçu için ücretsiz bir Gemini anahtarı gerekir; uygulama içindeki **Yapay zeka koçu → Anahtar ayarla** penceresi adım adım anlatır.
 
 ## Teknolojiler
