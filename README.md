@@ -9,7 +9,8 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 - C# / .NET 10, Windows Forms
 - DevExpress WinForms bileşenleri
 - SQLite + Entity Framework Core 10
-- Yapay zeka API (işlem örüntüsü analizi)
+- Google Gemini API (yapay zeka koçu)
+- Supabase REST API (Chart Vault entegrasyonu)
 
 ## Proje yapısı
 
@@ -17,7 +18,7 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 |---|---|
 | `TradingJournal.Core` | Entity'ler (`Trade`, `ForexTrade`, `CryptoTrade`, `Account`...), arayüzler, doğrulama |
 | `TradingJournal.Data` | EF Core `DbContext`, tablo eşlemeleri, generic repository, migration'lar |
-| `TradingJournal.Services` | İş mantığı: istatistikler, risk kuralları, yapay zeka istemcisi |
+| `TradingJournal.Services` | İş mantığı: istatistikler, analiz, risk kuralları, yapay zeka koçu, Chart Vault aktarımı, ekran görüntüleri, örnek veri |
 | `TradingJournal.UI` | DevExpress ile Windows Forms arayüzü |
 
 Bağımlılık yönü tek taraflıdır: **UI → Services → Data → Core**.
@@ -42,9 +43,18 @@ cd edgebook
 dotnet build
 ```
 
-Uygulama ilk açılışta veritabanını kendisi oluşturur (`Database.Migrate()`), ayrıca komut çalıştırmaya gerek yoktur.
+4. Visual Studio'da `TradingJournal.UI` projesini başlangıç projesi yapıp çalıştırın (F5).
+
+Uygulama ilk açılışta veritabanını kendisi oluşturur (`Database.Migrate()`), ayrıca komut çalıştırmaya gerek yoktur. Denemek için **Tanımlar → Örnek veri oluştur** ile örnek işlemler eklenebilir.
 
 > `TradingJournal.UI.csproj` içindeki `DevExpressVersion` değeri, bilgisayarında kurulu DevExpress sürümüyle aynı olmalıdır.
+
+### İsteğe bağlı ayarlar
+
+- **Yapay zeka koçu:** Uygulamada **Yapay zeka koçu → Anahtar ayarla** ile kendi ücretsiz Gemini anahtarınızı girin ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+- **Chart Vault aktarımı:** `TradingJournal.UI/appsettings.Local.example.json` dosyasını `appsettings.Local.json` adıyla kopyalayıp doldurun. Bu dosya `.gitignore`'dadır.
+
+API anahtarları, bağlantı bilgileri ve veritabanı dosyası repoya dahil edilmez.
 
 ## Arayüz
 
@@ -54,6 +64,8 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **İşlemler:** Sade işlem listesi ve sağda detay paneli: sonuç, risk/ödül çubuğu, detaylar, etiketler, notlar. **Chart ekran görüntüleri** dosyadan, sürükle-bırak ile veya **Ctrl+V** ile panodan eklenir. Görüntüler `%LocalAppData%\EdgeBook\screenshots` klasöründe saklanır.
 - **Takvim:** Günlük net sonuç takvimi ve haftalık toplamlar. Bir güne tıklayınca o günün işlemleri listelenir.
 - **Analiz:** DevExpress `PivotGridControl` ile çapraz tablolar. Hazır analizler: Seans × Yön, Sembol × Seans × Yön (ör. "Asya'da EURUSD Long işlemlerin başarı oranı"), Killzone, Gün × Saat, İşlemde kalma süresi, Risk büyüklüğü, Strateji, Aylık. Alanlar sürükle-bırak ile değiştirilebilir, tablo Excel'e aktarılabilir. Sağ panelde davranış istatistikleri (işlemde kalma süresi, ortalama risk, planlanan RR, seriler) ve en güçlü / en zayıf sembol-seans-yön kombinasyonları. Seanslar New York saatine göre, yaz/kış saati farkı dahil dakika hassasiyetinde hesaplanır.
+- **Yapay zeka koçu:** Gemini ile koç raporu ve işlemler hakkında soru-cevap (ayrıntılar aşağıda).
+- **Chart Vault:** Chart Vault web uygulamasındaki Journal işlemlerini içe aktarma (ayrıntılar aşağıda).
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
 
 ## Örnek veri
@@ -82,3 +94,7 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - Her kullanıcı kendi ücretsiz Gemini anahtarını girer (aistudio.google.com/apikey). Anahtar Windows DPAPI ile şifrelenip `%LocalAppData%\EdgeBook\gemini.key` dosyasında saklanır. İsteğe bağlı yedek anahtar `appsettings.Local.json` içindeki `Ai:GeminiApiKey` alanına yazılabilir.
 - Kota dolduğunda (HTTP 429) veya anahtar geçersiz olduğunda uygulama anlaşılır bir mesaj gösterir.
 - Model adı sabit değildir: ayarlanan model bulunamazsa hesabın erişebildiği en güncel Flash modeli otomatik seçilir.
+
+## Yapay zeka kullanımı hakkında
+
+Bu projenin geliştirilmesinde kod yardımı için yapay zeka asistanı (Anthropic Claude) kullanılmıştır; ilgili commit'lerde `Co-Authored-By` satırıyla belirtilmiştir. Ders yönergesi gereği yapay zeka kullanımı yazılı raporda da açıklanmıştır.
