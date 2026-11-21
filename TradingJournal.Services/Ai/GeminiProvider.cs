@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -141,6 +142,95 @@ public class GeminiProvider : IAiProvider
                 new AiException("Gemini şu an yoğun ya da erişilemiyor. Biraz sonra tekrar dene."),
             _ => new AiException($"Gemini hatası ({(int)status}): {apiMessage ?? "bilinmeyen hata"}")
         };
+    }
+
+    // Sorunun hangi adımda olduğunu bulmak için adım adım bağlantı testi:
+    //   1) Model listesi (anahtar geçerli mi, Google'a ulaşılıyor mu?)  2) Kısa bir deneme cevabı.
+    // Her adımın kendi kısa zaman aşımı var; sonuç kullanıcıya okunur bir metin olarak döner.
+    public async Task<string> DiagnoseAsync(CancellationToken cancellationToken = default)
+    {
+        var report = new StringBuilder();
+        var watch = Stopwatch.StartNew();
+
+        // 1. adım: model listesi
+        List<string> models;
+        try
+        {
+            using var step = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            step.CancelAfter(TimeSpan.FromSeconds(20));
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/models?pageSize=200");
+            request.Headers.Add("x-goog-api-key", _apiKey);
+            using HttpResponseMessage response = await SharedHttp.SendAsync(request, step.Token);
+            string json = await response.Content.ReadAsStringAsync(step.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                Exception error = ToException(response.StatusCode, json);
+                return $"1) Google'a ulaşıldı ama istek reddedildi ({(int)response.StatusCode}): {error.Message}";
+            }
+
+            models = (JsonSerializer.Deserialize<ModelList>(json)?.Models ?? [])
+                .Where(m => m.Methods?.Contains("generateContent") == true)
+                .Select(m => m.Name.Replace("models/", ""))
+                .ToList();
+            report.AppendLine($"✓ 1) Google'a bağlanıldı, anahtar geçerli ({watch.Elapsed.TotalSeconds:0.0} sn). " +
+                              $"Kullanılabilir model sayısı: {models.Count}.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return "✗ 1) Google'ın sunucusuna 20 saniyede bağlanılamadı. İnternet, güvenlik duvarı, antivirüs veya VPN " +
+                   "bağlantıyı engelliyor olabilir.";
+        }
+        catch (HttpRequestException ex)
+        {
+            return $"✗ 1) Google'ın sunucusuna bağlanılamadı: {ex.InnerException?.Message ?? ex.Message}";
+        }
+
+        // Hangi model kullanılacak?
+        string model = _resolvedModel ?? _model;
+        if (!models.Contains(model) && model != DefaultModel)
+            report.AppendLine($"! Ayarlanan model ({model}) listede yok.");
+        if (!models.Contains(model))
+        {
+            string? flash = await FindFlashModelAsync(cancellationToken);
+            if (flash is not null)
+            {
+                _resolvedModel = model = flash;
+                report.AppendLine($"  Kullanılacak model: {flash}");
+            }
+        }
+        else
+        {
+            report.AppendLine($"  Kullanılacak model: {model}");
+        }
+
+        // 2. adım: kısa deneme
+        watch.Restart();
+        try
+        {
+            using var step = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            step.CancelAfter(TimeSpan.FromSeconds(60));
+            string answer = await SendAsync(model, "Kısa cevap ver.", [new ChatMessage(true, "Sadece 'Bağlantı çalışıyor' yaz.")], step.Token);
+            report.AppendLine($"✓ 2) Model cevap verdi ({watch.Elapsed.TotalSeconds:0.0} sn): \"{answer}\"");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            report.AppendLine($"✗ 2) {model} modeli 60 saniyede cevap vermedi. Model yoğun olabilir; " +
+                              "appsettings.Local.json'da Ai:GeminiModel alanına başka bir model adı yazmayı dene.");
+        }
+        catch (AiException ex)
+        {
+            report.AppendLine($"✗ 2) Deneme cevabı alınamadı: {ex.Message}");
+        }
+        catch (ModelNotFoundException)
+        {
+            report.AppendLine($"✗ 2) {model} modeli bulunamadı (404).");
+        }
+        catch (HttpRequestException ex)
+        {
+            report.AppendLine($"✗ 2) Bağlantı koptu: {ex.InnerException?.Message ?? ex.Message}");
+        }
+
+        return report.ToString().TrimEnd();
     }
 
     // Hesabın erişebildiği modellerden metin üretebilen, en güncel "flash" modelini seçer.

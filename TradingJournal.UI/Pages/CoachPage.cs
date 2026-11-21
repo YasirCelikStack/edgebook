@@ -43,6 +43,7 @@ public class CoachPage : PageBase
     public CoachPage(AppState state) : base(state)
     {
         _keyButton.Click += async (_, _) => await EditKeyAsync();
+        _testButton.Click += async (_, _) => await TestConnectionAsync();
         _reportButton.Click += async (_, _) => await CreateReportAsync();
         _askButton.Click += async (_, _) => await AskAsync(_question.Text);
         _question.Properties.NullValuePrompt = "İşlemlerin hakkında bir soru yaz ve Enter'a bas...";
@@ -56,6 +57,7 @@ public class CoachPage : PageBase
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 50, BackColor = Theme.Background, WrapContents = false };
         top.Controls.Add(_keyStatus);
         top.Controls.Add(_keyButton);
+        top.Controls.Add(_testButton);
 
         // Sol: rapor
         var reportBottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 46, BackColor = Theme.Card, FlowDirection = FlowDirection.RightToLeft };
@@ -194,6 +196,33 @@ public class CoachPage : PageBase
     private static Color ErrorColor(AiException ex) => ex is AiQuotaExceededException ? Theme.Warning : Theme.Loss;
 
     // Kota / anahtar / bağlantı hataları beklenen durumlar: hata kutusu yerine ilgili alanda sakin bir mesaj gösterilir.
+    // Bağlantıyı adım adım dener ve sonucu sohbet alanına yazar. Model listesi kota harcamaz;
+    // kısa deneme cevabı 1 istek harcar.
+    private async Task TestConnectionAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _testButton.Enabled = _reportButton.Enabled = _askButton.Enabled = false;
+        AppendChat(false, "Bağlantı test ediliyor... (en fazla 1-2 dakika)", Theme.TextFaint);
+        try
+        {
+            var provider = new GeminiProvider(AiKeyStore.ResolveKey(), AppSettings.Current.Ai.GeminiModel);
+            string result = await provider.DiagnoseAsync();
+            RemoveLastChatLine();
+            AppendChat(false, result, result.Contains('✗') ? Theme.Warning : Theme.Profit);
+        }
+        catch (AiException ex)
+        {
+            RemoveLastChatLine();
+            AppendChat(false, ex.Message, ErrorColor(ex));
+        }
+        finally
+        {
+            _busy = false;
+            _testButton.Enabled = _reportButton.Enabled = _askButton.Enabled = true;
+        }
+    }
+
     private async Task RunBusyAsync(Func<Task> action, Action<AiException> onAiError)
     {
         _busy = true;
