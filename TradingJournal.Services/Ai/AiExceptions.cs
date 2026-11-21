@@ -11,10 +11,11 @@ public class AiException : Exception
 // Günlük / dakikalık ücretsiz kota doldu (HTTP 429).
 public class AiQuotaExceededException : AiException
 {
-    public AiQuotaExceededException(bool daily)
-        : base(daily
-            ? "Bugünkü ücretsiz yapay zeka hakkın doldu. Kota Türkiye saatiyle sabah 10-11 civarında yenilenir."
-            : "Dakikalık istek sınırına takıldın (ücretsiz katmanda dakikada birkaç istek). 1 dakika bekleyip tekrar dene.")
+    public AiQuotaExceededException(bool daily, string? detail = null)
+        : base((daily
+                   ? "Bugünkü ücretsiz yapay zeka hakkın doldu. Kota Türkiye saatiyle sabah 10-11 civarında yenilenir."
+                   : "Dakikalık istek sınırına takıldın (ücretsiz katmanda dakikada birkaç istek). 1 dakika bekleyip tekrar dene.")
+               + (detail is null ? "" : $"\n(Gemini: {detail})"))
     {
         IsDaily = daily;
     }

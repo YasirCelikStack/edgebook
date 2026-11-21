@@ -90,7 +90,7 @@ public class GeminiProvider : IAiProvider
                 // Dakikalık sınır: başka modele geçmek yerine (onların ücretsiz hakkı olmayabilir)
                 // Gemini'nin söylediği kadar bekleyip aynı modeli bir kez daha dene.
                 if (waitedForRateLimit || quota.RetryAfter > MaxRetryWait)
-                    throw new AiQuotaExceededException(daily: false);
+                    throw new AiQuotaExceededException(daily: false, $"{model}: {quota.Detail}");
                 waitedForRateLimit = true;
                 await Task.Delay(quota.RetryAfter + TimeSpan.FromSeconds(1), ct);
                 continue;
@@ -107,7 +107,7 @@ public class GeminiProvider : IAiProvider
         string triedText = string.Join(", ", tried);
         throw lastError switch
         {
-            QuotaExceededForModelException => new AiQuotaExceededException(daily: true),
+            QuotaExceededForModelException q => new AiQuotaExceededException(daily: true, $"{triedText} · {q.Detail}"),
             OperationCanceledException => new AiException($"Gemini zamanında yanıt vermedi (denenen modeller: {triedText}). Biraz sonra tekrar dene."),
             ModelNotFoundException => new AiException($"Kullanılabilir bir Gemini modeli bulunamadı (denenen: {triedText})."),
             ServiceUnavailableException => new AiException($"Gemini modelleri şu an yoğun (denenen: {triedText}). Birkaç dakika sonra tekrar dene."),
@@ -294,13 +294,13 @@ public class GeminiProvider : IAiProvider
         }
     }
 
-    // 429 cevabından sınırın günlük mü dakikalık mı olduğunu ve ne kadar beklenmesi gerektiğini çıkarır.
-    // Örnek: error.message "...GenerateRequestsPerDayPerProjectPerModel-FreeTier..." ve details[].retryDelay "17s"
+    // 429 cevabından hangi kotanın aşıldığını ve ne kadar beklenmesi gerektiğini çıkarır.
+    // Gemini hata gövdesindeki details[] dizisinde şunlar bulunur:
+    //   QuotaFailure.violations[].quotaId  → örn. "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    //   RetryInfo.retryDelay               → örn. "17s"
     private static QuotaExceededForModelException ParseQuota(string json, string? apiMessage)
     {
-        bool daily = json.Contains("PerDay", StringComparison.OrdinalIgnoreCase)
-                     || apiMessage?.Contains("per day", StringComparison.OrdinalIgnoreCase) == true;
-
+        var quotaIds = new List<string>();
         TimeSpan retryAfter = TimeSpan.FromSeconds(20);
         try
         {
@@ -309,6 +309,11 @@ public class GeminiProvider : IAiProvider
             {
                 foreach (JsonElement detail in details.EnumerateArray())
                 {
+                    if (detail.TryGetProperty("violations", out JsonElement violations))
+                        foreach (JsonElement v in violations.EnumerateArray())
+                            if (v.TryGetProperty("quotaId", out JsonElement id) && id.GetString() is string quotaId)
+                                quotaIds.Add(quotaId);
+
                     if (detail.TryGetProperty("retryDelay", out JsonElement delay)
                         && delay.GetString() is string text
                         && double.TryParse(text.TrimEnd('s'), System.Globalization.NumberStyles.Float,
@@ -319,20 +324,27 @@ public class GeminiProvider : IAiProvider
         }
         catch (Exception)
         {
-            // Ayrıntı yoksa varsayılan bekleme süresi kullanılır.
+            // Ayrıntı yoksa aşağıdaki varsayılanlar kullanılır.
         }
 
-        return new QuotaExceededForModelException(daily, retryAfter);
+        // Aşılan kotalardan biri günlükse günlük say; hiç ayrıntı yoksa mesaja bak.
+        bool daily = quotaIds.Count > 0
+            ? quotaIds.Any(id => id.Contains("PerDay", StringComparison.OrdinalIgnoreCase))
+            : apiMessage?.Contains("per day", StringComparison.OrdinalIgnoreCase) == true;
+
+        string detailText = quotaIds.Count > 0 ? string.Join(", ", quotaIds.Distinct()) : apiMessage ?? "ayrıntı yok";
+        return new QuotaExceededForModelException(daily, retryAfter, detailText);
     }
 
     // --- Sadece bu sınıfın içinde kullanılan, "başka modeli dene / bekle" anlamına gelen hatalar ---
     private sealed class ModelNotFoundException : Exception;
     private sealed class ServiceUnavailableException : Exception;
 
-    private sealed class QuotaExceededForModelException(bool isDaily, TimeSpan retryAfter) : Exception
+    private sealed class QuotaExceededForModelException(bool isDaily, TimeSpan retryAfter, string detail) : Exception
     {
         public bool IsDaily { get; } = isDaily;
         public TimeSpan RetryAfter { get; } = retryAfter;
+        public string Detail { get; } = detail;
     }
 
     // --- Gemini JSON yanıtlarının C# karşılıkları ---
