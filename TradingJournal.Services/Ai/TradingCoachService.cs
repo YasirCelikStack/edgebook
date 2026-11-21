@@ -20,6 +20,10 @@ public class TradingCoachService
         - Her tespiti sayıyla destekle (işlem sayısı, win rate, ortalama R, süre).
         - Sayıları verilerden olduğu gibi al; verilerde olmayan bir oranı veya R değerini kendin hesaplamaya çalışma.
         - 5'ten az işlemli gruplar için kesin hüküm verme; "örneklem küçük" diye belirt.
+        - Sonuçtan etkilenen bilgileri sebep gibi sunma. Örneğin kaybeden işlemler stop olana kadar beklediği için
+          doğal olarak uzun sürer; "kısa işlemler daha başarılı" demek yerine kazananların erken kapatıldığını söyle.
+          Uygulama puanı da işlem bittikten sonra verilir, sonuçla ilişkisini dikkatli yorumla.
+        - Zayıf noktaları sıralarken seans/killzone, gün, sembol ve etiket kırılımlarının hepsine bak; tek bir boyutta kalma.
         - Fiyat tahmini, al-sat sinyali veya yatırım tavsiyesi verme. Davranış, risk yönetimi ve süreç önerileri ver.
         - Türkçe, sade ve samimi yaz; kullanıcıya "sen" diye hitap et.
         - Markdown kullanma (yıldız, diyez, tablo yok). Başlıkları BÜYÜK HARFLE yaz, maddeler için "•" kullan.

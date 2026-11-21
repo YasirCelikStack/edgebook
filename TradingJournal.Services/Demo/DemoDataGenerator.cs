@@ -189,11 +189,14 @@ public class DemoDataGenerator
             {
                 decimal exit = Round(entry + sign * stopDistance * resultR, info.Digits);
                 trade.Close(exit, openTime.AddMinutes(holdMinutes));
-                trade.Rating = resultR > 0
-                    ? (isAPlus ? 5 : random.Next(3, 5))
-                    : (isFomo || isRevenge ? random.Next(1, 3) : random.Next(2, 4));
                 previousLoss = resultR < 0;
             }
+
+            // Uygulama puanı sonuca göre değil davranışa göre verilir (plana uyuldu mu?).
+            // Sonuca göre verilseydi "4-5 yıldızlıların hepsi kazanmış" gibi yanıltıcı bir ilişki oluşurdu.
+            trade.Rating = isAPlus ? random.Next(4, 6)
+                : isFomo || isRevenge ? random.Next(1, 3)
+                : random.Next(2, 5);
 
             db.Trades.Add(trade);
         }
