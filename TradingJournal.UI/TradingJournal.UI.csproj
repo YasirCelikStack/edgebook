@@ -18,6 +18,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- WinForms projelerinde System.IO otomatik eklenmiyor (File, FileStream, MemoryStream için). -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- DevExpress kurulumu "DevExpress XX.X Local" NuGet kaynağını ekler; paket oradan gelir. -->
     <PackageReference Include="DevExpress.Win.Design" Version="$(DevExpressVersion)" />
     <PackageReference Include="DevExpress.Win.Charts" Version="$(DevExpressVersion)" />

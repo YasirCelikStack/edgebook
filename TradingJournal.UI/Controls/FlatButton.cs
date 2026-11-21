@@ -25,10 +25,13 @@ public class FlatButton : Control
         Width = MeasureWidth();
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string? Glyph { get; set; }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool Primary { get; set; }
 
     // Sil gibi tehlikeli işlemler için kırmızı vurgulu.
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool Danger { get; set; }
 
     private int MeasureWidth()

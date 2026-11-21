@@ -27,6 +27,7 @@ public class PnlCalendar : Control
         SetStyle(ControlStyles.ResizeRedraw, true);
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public DateTime Month
     {
         get => _month;

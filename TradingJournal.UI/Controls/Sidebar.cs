@@ -81,6 +81,7 @@ public class Sidebar : Panel
         public string Key { get; }
         public string Glyph { get; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool Selected
         {
             get => _selected;

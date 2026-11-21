@@ -20,6 +20,7 @@ public class CardPanel : Panel
         SetStyle(ControlStyles.ResizeRedraw, true);
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string Title
     {
         get => _title;
@@ -27,6 +28,7 @@ public class CardPanel : Panel
     }
 
     // Başlığın sağında gösterilen küçük açıklama (örn. "son 30 işlem").
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string? Hint { get; set; }
 
     private void UpdatePadding()

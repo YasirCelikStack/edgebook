@@ -31,7 +31,7 @@ public static class ChartStyler
         diagram.DefaultPane.BackColor = Theme.Card;
         diagram.DefaultPane.BorderVisible = false;
 
-        foreach (AxisBase axis in new AxisBase[] { diagram.AxisX, diagram.AxisY })
+        foreach (Axis axis in new Axis[] { diagram.AxisX, diagram.AxisY })
         {
             axis.Color = Theme.Border;
             axis.Label.TextColor = Theme.TextMuted;
