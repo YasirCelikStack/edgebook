@@ -67,4 +67,14 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - Kullanıcı sadece Chart Vault e-posta ve şifresini girer; şifre kaydedilmez.
 - Chart Vault'un Supabase adresi ve publishable key'i geliştirici ayarıdır: `TradingJournal.UI/appsettings.Local.example.json` dosyasını `appsettings.Local.json` adıyla kopyalayıp doldurun. Bu dosya `.gitignore`'dadır ve derlemede exe'nin yanına kopyalanır.
 
-*(Yapay zeka ayarları geliştikçe eklenecek.)*
+## Yapay zeka koçu
+
+**Yapay zeka koçu** sayfası Google Gemini API'sini HttpClient ile çağırır (`TradingJournal.Services/Ai`).
+
+- **Koç raporu:** Güçlü yanlar, zayıf noktalar (seans / sembol / yön / killzone / gün / etiket kırılımları), davranış (işlemde kalma süresi, risk) ve önümüzdeki hafta için 3 kural. Rapor hesap başına kaydedilir; tekrar açınca kota harcanmaz.
+- **Koça sor:** İşlemler hakkında serbest soru-cevap (önceki mesajlar bağlam olarak gönderilir), hazır soru önerileri.
+- Modele ham veritabanı değil, `TradingContextBuilder` ile hazırlanmış istatistik özeti ve son 40 işlemin kısa açıklaması gönderilir. Hesaplama uygulamada yapılır, model sadece yorumlar.
+- `IAiProvider` arayüzü → `GeminiProvider`. Başka bir model (Claude, yerel Ollama) aynı arayüzle eklenebilir.
+- Her kullanıcı kendi ücretsiz Gemini anahtarını girer (aistudio.google.com/apikey). Anahtar Windows DPAPI ile şifrelenip `%LocalAppData%\EdgeBook\gemini.key` dosyasında saklanır. İsteğe bağlı yedek anahtar `appsettings.Local.json` içindeki `Ai:GeminiApiKey` alanına yazılabilir.
+- Kota dolduğunda (HTTP 429) veya anahtar geçersiz olduğunda uygulama anlaşılır bir mesaj gösterir.
+- Model adı sabit değildir: ayarlanan model bulunamazsa hesabın erişebildiği en güncel Flash modeli otomatik seçilir.

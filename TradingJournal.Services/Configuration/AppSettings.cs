@@ -10,6 +10,16 @@ public class AppSettings
     public const string FileName = "appsettings.Local.json";
 
     public ChartVaultSection ChartVault { get; set; } = new();
+    public AiSection Ai { get; set; } = new();
+
+    public class AiSection
+    {
+        // İsteğe bağlı yedek anahtar: kullanıcı kendi Gemini anahtarını girmediyse bu kullanılır.
+        public string? GeminiApiKey { get; set; }
+
+        // Boşsa GeminiProvider.DefaultModel; bulunamazsa en güncel Flash modeli otomatik seçilir.
+        public string? GeminiModel { get; set; }
+    }
 
     public class ChartVaultSection
     {
