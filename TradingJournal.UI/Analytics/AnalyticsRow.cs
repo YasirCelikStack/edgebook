@@ -1,3 +1,5 @@
+using System.Data;
+using System.Reflection;
 using TradingJournal.Core.Entities;
 using TradingJournal.Core.Enums;
 using TradingJournal.Services.Statistics;
@@ -86,5 +88,25 @@ public class AnalyticsRow
                 ? Math.Round(Math.Abs(tp - t.EntryPrice) / Math.Abs(t.EntryPrice - t.StopLoss), 2)
                 : null
         };
+    }
+
+    // Pivot tablo, nesne listesini her sürümde ve her veri motorunda aynı güvenilirlikte okuyamıyor
+    // (ilk denemede tüm değerler boş geldi). DataTable ise PivotGridControl'ün en sağlam veri kaynağı;
+    // satırlar bu yüzden tabloya çevrilir. Sütun adları property adlarıyla aynıdır.
+    public static DataTable ToDataTable(IEnumerable<AnalyticsRow> rows)
+    {
+        PropertyInfo[] properties = typeof(AnalyticsRow).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var table = new DataTable("Analytics");
+        foreach (PropertyInfo p in properties)
+            table.Columns.Add(p.Name, Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType);
+
+        foreach (AnalyticsRow row in rows)
+        {
+            DataRow dataRow = table.NewRow();
+            foreach (PropertyInfo p in properties)
+                dataRow[p.Name] = p.GetValue(row) ?? DBNull.Value;
+            table.Rows.Add(dataRow);
+        }
+        return table;
     }
 }

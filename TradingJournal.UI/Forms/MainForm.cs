@@ -93,18 +93,38 @@ public class MainForm : XtraForm
     {
         _accountPicker.Properties.Buttons[0].Kind = ButtonPredefines.Combo;
         _accountPicker.Properties.TextEditStyle = DevExpress.XtraEditors.Controls.TextEditStyles.DisableTextEditor;
-        _accountPicker.EditValueChanged += (_, _) =>
-        {
-            if (_loadingAccounts) return;
-            int value = _accountPicker.EditValue is int v ? v : -1;
-            _state.SelectAccount(value < 0 ? null : value);
-        };
+        // Seçim hem listeden tıklayınca (SelectedIndexChanged) hem değer değişince (EditValueChanged) okunur;
+        // SelectAccount aynı hesap için iki kez çağrılsa da sayfayı bir kez yeniler.
+        _accountPicker.SelectedIndexChanged += (_, _) => OnAccountPicked();
+        _accountPicker.EditValueChanged += (_, _) => OnAccountPicked();
 
         _newTradeButton.Click += async (_, _) => await NewTradeAsync();
 
         _topBar.Controls.AddRange([_title, _subtitle, _accountPicker, _newTradeButton]);
         _topBar.Resize += (_, _) => PositionTopBarControls();
         PositionTopBarControls();
+    }
+
+    private void OnAccountPicked()
+    {
+        if (_loadingAccounts) return;
+        object? value = _accountPicker.EditValue
+                        ?? (_accountPicker.SelectedItem as ImageComboBoxItem)?.Value;
+        int id = value is int v ? v : -1;
+        _state.SelectAccount(id < 0 ? null : id);
+        UpdateSubtitle();
+    }
+
+    // Alt başlıkta hangi hesabın gösterildiği de yazar; seçimin işe yaradığı ekrandan görülür.
+    private void UpdateSubtitle()
+    {
+        if (_currentPage is null) return;
+        string scope = _state.AccountId is null
+            ? "Tüm hesaplar"
+            : (_accountPicker.SelectedItem as ImageComboBoxItem)?.Description ?? "Seçili hesap";
+        _subtitle.Text = _currentPage is DefinitionsPage or ImportPage
+            ? _currentPage.Subtitle
+            : $"{_currentPage.Subtitle}   ·   {scope}";
     }
 
     private void PositionTopBarControls()
@@ -160,7 +180,7 @@ public class MainForm : XtraForm
         }
 
         _title.Text = page.Title;
-        _subtitle.Text = page.Subtitle;
+        UpdateSubtitle();
         await SafeRefreshAsync(page);
     }
 

@@ -34,6 +34,7 @@ public class AnalyticsPage : PageBase
     private readonly InsightList _best = new() { Dock = DockStyle.Fill };
     private readonly CardPanel _worstCard = new("Zayıf noktaların") { Hint = $"en az {MinTradesForEdge} işlem" };
     private readonly InsightList _worst = new() { Dock = DockStyle.Fill };
+    private readonly Panel _side;
 
     public AnalyticsPage(AppState state) : base(state)
     {
@@ -67,18 +68,20 @@ public class AnalyticsPage : PageBase
         _bestCard.Controls.Add(_best);
         _worstCard.Controls.Add(_worst);
 
-        var side = new TableLayoutPanel { Dock = DockStyle.Right, Width = 360, ColumnCount = 1, RowCount = 3, BackColor = Theme.Background };
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 44 + 9 * 46 + 16));
-        side.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        side.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        foreach (CardPanel card in new[] { _behaviorCard, _bestCard, _worstCard })
-            card.Dock = DockStyle.Fill;
-        side.Controls.Add(_behaviorCard, 0, 0);
-        side.Controls.Add(_bestCard, 0, 1);
-        side.Controls.Add(_worstCard, 0, 2);
+        // Sağ panel: kartlar alt alta, her biri içeriği kadar uzun; sığmazsa panel kaydırılır.
+        _side = new Panel { Dock = DockStyle.Right, Width = 372, AutoScroll = true, BackColor = Theme.Background, Padding = new Padding(0, 0, 4, 0) };
+        // Dock=Top'ta son eklenen en üstte durur: alttan üste doğru ekliyoruz, aralara boşluk koyuyoruz.
+        CardPanel[] order = [_worstCard, _bestCard, _behaviorCard];
+        for (int i = 0; i < order.Length; i++)
+        {
+            order[i].Dock = DockStyle.Top;
+            _side.Controls.Add(order[i]);
+            if (i < order.Length - 1)
+                _side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = Theme.Background });
+        }
 
         Controls.Add(_pivotCard);
-        Controls.Add(side);
+        Controls.Add(_side);
         Controls.Add(_presetDescription);
         Controls.Add(top);
 
@@ -119,12 +122,14 @@ public class AnalyticsPage : PageBase
         List<Trade> trades = await State.LoadTradesAsync();
         List<Trade> closed = trades.Where(t => t.IsClosed).ToList();
 
-        _pivot.DataSource = closed.Select(AnalyticsRow.From).ToList();
+        _pivot.DataSource = AnalyticsRow.ToDataTable(closed.Select(AnalyticsRow.From));
+        _pivot.RefreshData();
         _pivotCard.Hint = $"{closed.Count} kapanmış işlem";
         _pivotCard.Invalidate();
 
         UpdateBehavior(trades);
         UpdateEdges(closed);
+        FitSideCards();
     }
 
     // ---------------- Hazır analizler ----------------
@@ -166,6 +171,14 @@ public class AnalyticsPage : PageBase
     }
 
     // ---------------- Sağ panel ----------------
+
+    // Kartın yüksekliği = başlık alanı + satırlar. Böylece alttaki satırlar kesilmez.
+    private void FitSideCards()
+    {
+        _behaviorCard.Height = 44 + _behavior.PreferredHeight + 16;
+        _bestCard.Height = 44 + _best.PreferredHeight + 16;
+        _worstCard.Height = 44 + _worst.PreferredHeight + 16;
+    }
 
     private void UpdateBehavior(List<Trade> trades)
     {

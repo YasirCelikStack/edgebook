@@ -21,7 +21,8 @@ public class InsightList : Control
         SetStyle(ControlStyles.ResizeRedraw, true);
     }
 
-    public int PreferredHeight => Math.Max(1, _lines.Count) * LineHeight;
+    // Boşken açıklama metni iki-üç satır sürebilir; ona yer bırak.
+    public int PreferredHeight => _lines.Count == 0 ? 64 : _lines.Count * LineHeight;
 
     public void SetLines(List<Line> lines, string emptyText = "Yeterli veri yok")
     {
