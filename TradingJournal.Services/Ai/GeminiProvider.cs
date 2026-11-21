@@ -14,7 +14,12 @@ public class GeminiProvider : IAiProvider
     public const string DefaultModel = "gemini-flash-latest";
     private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta";
 
-    private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(90) };
+    private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(180) };
+
+    // Yeni Flash modelleri cevaptan önce "düşünür"; bu, cevabı dakikalarca geciktirebilir.
+    // Koç yorumu için derin düşünmeye gerek yok, düşünme seviyesi "low" istenir.
+    // Model bu ayarı tanımazsa (400) bir daha gönderilmez.
+    private static bool _thinkingConfigUnsupported;
 
     // Otomatik bulunan model, uygulama açık kaldıkça tekrar aranmasın.
     private static string? _resolvedModel;
@@ -53,7 +58,7 @@ public class GeminiProvider : IAiProvider
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new AiException("Gemini zamanında yanıt vermedi. Biraz sonra tekrar dene.", ex);
+            throw new AiException("Gemini 3 dakika içinde yanıt vermedi. Servis yoğun olabilir; biraz sonra tekrar dene.", ex);
         }
     }
 
@@ -67,7 +72,9 @@ public class GeminiProvider : IAiProvider
                 role = m.FromUser ? "user" : "model",
                 parts = new[] { new { text = m.Text } }
             }).ToArray(),
-            generationConfig = new { temperature = 0.4 }
+            generationConfig = _thinkingConfigUnsupported
+                ? (object)new { temperature = 0.4 }
+                : new { temperature = 0.4, thinkingConfig = new { thinkingLevel = "low" } }
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/models/{model}:generateContent")
@@ -78,6 +85,13 @@ public class GeminiProvider : IAiProvider
 
         using HttpResponseMessage response = await SharedHttp.SendAsync(request, ct);
         string json = await response.Content.ReadAsStringAsync(ct);
+
+        if (response.StatusCode == HttpStatusCode.BadRequest && !_thinkingConfigUnsupported
+            && json.Contains("thinking", StringComparison.OrdinalIgnoreCase))
+        {
+            _thinkingConfigUnsupported = true;
+            return await SendAsync(model, systemPrompt, messages, ct);
+        }
 
         if (!response.IsSuccessStatusCode)
             throw ToException(response.StatusCode, json);

@@ -162,7 +162,7 @@ public class CoachPage : PageBase
         if (_busy) return;
         await RunBusyAsync(async () =>
         {
-            SetReportText("Koç işlemlerini inceliyor...", Theme.TextMuted);
+            SetReportText("Koç işlemlerini inceliyor... (genelde 15-45 saniye sürer)", Theme.TextMuted);
             await CreateCoach().CreateReportAsync(_trades, ScopeKey, ScopeName);
             ShowSavedReport();
         }, onAiError: ex => SetReportText(ex.Message, ErrorColor(ex)));
@@ -177,7 +177,7 @@ public class CoachPage : PageBase
 
         await RunBusyAsync(async () =>
         {
-            AppendChat(false, "Düşünüyor...", Theme.TextFaint);
+            AppendChat(false, "Düşünüyor... (genelde 10-30 saniye sürer)", Theme.TextFaint);
             string answer = await CreateCoach().AskAsync(_trades, ScopeName, _history, question);
             RemoveLastChatLine();
             AppendChat(false, answer);
