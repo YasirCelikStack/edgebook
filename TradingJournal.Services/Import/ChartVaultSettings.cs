@@ -12,6 +12,8 @@ public class ChartVaultSettings
     public string SupabaseUrl => AppSettings.Current.ChartVault.SupabaseUrl;
     public string PublishableKey => AppSettings.Current.ChartVault.PublishableKey;
     public bool IsConfigured => AppSettings.Current.ChartVault.IsConfigured;
+    public string SiteUrl => AppSettings.Current.ChartVault.SiteUrl;
+    public bool IsSiteConfigured => AppSettings.Current.ChartVault.IsSiteConfigured;
 
     public string? Email { get; set; }
 

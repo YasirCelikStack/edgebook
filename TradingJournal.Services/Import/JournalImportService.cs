@@ -3,6 +3,7 @@ using TradingJournal.Core.Entities;
 using TradingJournal.Core.Enums;
 using TradingJournal.Core.Exceptions;
 using TradingJournal.Data;
+using TradingJournal.Services.Screenshots;
 
 namespace TradingJournal.Services.Import;
 
@@ -10,6 +11,8 @@ namespace TradingJournal.Services.Import;
 public record ImportPreviewItem(ImportedTrade Trade, bool AlreadyImported);
 
 public record ImportResult(int Added, int Skipped, int Failed, List<string> Errors);
+
+public record ShotDownloadResult(int Downloaded, int AlreadyHad, int Failed, List<string> Errors);
 
 // Dış kaynaktan gelen işlemleri EdgeBook işlemlerine çevirip kaydeder.
 //
@@ -85,6 +88,60 @@ public class JournalImportService
         }
 
         return new ImportResult(added, skipped, failed, errors);
+    }
+
+    // Chart Vault'tan aktarılmış işlemlerin grafik görsellerini indirir ve işlemlere ekran görüntüsü olarak ekler.
+    // Daha önce indirilen görseller (açıklamasında "chartvault:<chart_id>" olanlar) tekrar indirilmez.
+    // Hem yeni aktarımdan sonra hem de eski işlemler için ayrıca çağrılabilir.
+    public async Task<ShotDownloadResult> DownloadChartVaultShotsAsync(ChartVaultApiImporter importer,
+        IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        const string prefix = "chartvault:";
+        Dictionary<string, int> tradeIdByJournalId;
+        using (var db = DbContextFactory.Create())
+        {
+            tradeIdByJournalId = (await db.Trades
+                    .Where(t => t.ExternalId != null && t.ExternalId.StartsWith(prefix))
+                    .Select(t => new { t.Id, t.ExternalId })
+                    .ToListAsync(ct))
+                .ToDictionary(t => t.ExternalId![prefix.Length..], t => t.Id);
+        }
+
+        if (tradeIdByJournalId.Count == 0)
+            return new ShotDownloadResult(0, 0, 0, new List<string>());
+
+        var screenshots = new ScreenshotService();
+        HashSet<string> alreadyDownloaded = await screenshots.GetCaptionsStartingWithAsync(prefix);
+
+        progress?.Report("Görsel listesi alınıyor...");
+        List<ChartVaultShot> shots = await importer.FetchShotsAsync(tradeIdByJournalId.Keys.ToList(), ct);
+
+        int downloaded = 0, alreadyHad = 0, failed = 0;
+        var errors = new List<string>();
+        List<ChartVaultShot> toDownload = shots.Where(s => !alreadyDownloaded.Contains(s.Marker)).ToList();
+        alreadyHad = shots.Count - toDownload.Count;
+
+        foreach (ChartVaultShot shot in toDownload)
+        {
+            if (!tradeIdByJournalId.TryGetValue(shot.JournalId, out int tradeId))
+                continue;
+
+            progress?.Report($"Görseller indiriliyor... {downloaded + failed + 1}/{toDownload.Count}");
+            try
+            {
+                (MemoryStream content, string extension) = await importer.DownloadShotAsync(shot, ct);
+                using (content)
+                    await screenshots.AddFromStreamAsync(tradeId, content, extension, shot.Marker);
+                downloaded++;
+            }
+            catch (Exception ex) when (ex is ImportException or DomainException or DataAccessException or HttpRequestException or IOException)
+            {
+                failed++;
+                errors.Add(ex.Message);
+            }
+        }
+
+        return new ShotDownloadResult(downloaded, alreadyHad, failed, errors);
     }
 
     private static async Task<HashSet<string>> LoadExistingIdsAsync(TradingJournalDbContext db)

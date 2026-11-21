@@ -80,6 +80,7 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - Sadece girilmiş işlemler aktarılır (`open`, `tp`, `sl`, `be`, `manual`); bekleyen ve gerçekleşmeyen planlar atlanır.
 - Chart Vault işlemleri R cinsindendir. Lot/miktar, seçilen hesabın bakiyesi ve "işlem başı risk %" değerinden hesaplanır.
 - Her işlem `ExternalId` (`chartvault:<uuid>`) ile işaretlenir; tekrar aktarımda aynı işlem eklenmez.
+- **Grafik görselleri:** Chart Vault'ta Journal'a eklerken kaydedilen grafik görseli, `GET {SiteUrl}/api/journal/shots?ids=…` uç noktasından kısa süreli imzalı adreslerle indirilir ve işleme ekran görüntüsü olarak eklenir. WebP görseller SkiaSharp ile PNG'ye çevrilir. Aynı görsel tekrar indirilmez. Bunun için `appsettings.Local.json`'da `ChartVault:SiteUrl` doldurulmalıdır.
 - Kullanıcı sadece Chart Vault e-posta ve şifresini girer; şifre kaydedilmez.
 - Chart Vault'un Supabase adresi ve publishable key'i geliştirici ayarıdır: `TradingJournal.UI/appsettings.Local.example.json` dosyasını `appsettings.Local.json` adıyla kopyalayıp doldurun. Bu dosya `.gitignore`'dadır ve derlemede exe'nin yanına kopyalanır.
 

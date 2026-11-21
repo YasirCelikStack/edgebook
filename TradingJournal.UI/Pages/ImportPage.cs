@@ -26,7 +26,8 @@ public class ImportPage : PageBase
     private readonly SpinEdit _risk = EditorFactory.Decimal(decimals: 2, max: 100);
     private readonly FlatButton _fetchButton = new("Bağlan ve getir", "\uE895", primary: true);
     private readonly FlatButton _importButton = new("İçe aktar", "\uE896", primary: true) { Enabled = false };
-    private readonly Label _status = new() { AutoSize = false, Height = 60, ForeColor = Theme.TextMuted, Font = Theme.Small };
+    private readonly FlatButton _shotsButton = new("Görselleri indir", "\uE91B") { Enabled = false };
+    private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = Theme.TextMuted, Font = Theme.Small, Margin = new Padding(0, 8, 0, 0) };
 
     private readonly GridControl _grid = new() { Dock = DockStyle.Fill };
     private readonly GridView _view;
@@ -43,6 +44,7 @@ public class ImportPage : PageBase
 
         _fetchButton.Click += async (_, _) => await FetchAsync();
         _importButton.Click += async (_, _) => await ImportAsync();
+        _shotsButton.Click += async (_, _) => await DownloadShotsOnlyAsync();
 
         var connection = new CardPanel("Chart Vault bağlantısı") { Dock = DockStyle.Fill };
         connection.Controls.Add(BuildForm());
@@ -126,7 +128,18 @@ public class ImportPage : PageBase
         _importButton.Margin = new Padding(0, 12, 0, 8);
         table.Controls.Add(_importButton);
 
-        _status.Dock = DockStyle.Top;
+        table.Controls.Add(new Label { Text = "GÖRSELLER", AutoSize = true, ForeColor = Theme.TextFaint, Font = Theme.Small, Margin = new Padding(0, 12, 0, 0) });
+        table.Controls.Add(new Label
+        {
+            Text = _settings.IsSiteConfigured
+                ? "Aktarılan işlemlerin Chart Vault'taki grafik görselleri aktarımla birlikte indirilir. Daha önce aktardığın işlemler için bu düğmeyi kullan."
+                : "Görselleri indirmek için Chart Vault site adresi gerekli (appsettings.Local.json → ChartVault:SiteUrl).",
+            AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = _settings.IsSiteConfigured ? Theme.TextMuted : Theme.Warning,
+            Font = Theme.Small, Margin = new Padding(0, 2, 0, 4)
+        });
+        _shotsButton.Margin = new Padding(0, 4, 0, 8);
+        table.Controls.Add(_shotsButton);
+
         table.Controls.Add(_status);
         return table;
     }
@@ -225,6 +238,7 @@ public class ImportPage : PageBase
             _source = new ChartVaultApiImporter(_settings, _email.Text, _password.Text);
             IReadOnlyList<ImportedTrade> trades = await _source.FetchAsync();
             _settings.Save(); // Giriş başarılıysa e-postayı hatırla (şifre kaydedilmez).
+            _shotsButton.Enabled = _settings.IsSiteConfigured;
             _preview = await _importService.PreviewAsync(trades);
             UpdatePreviewDisplay();
             SetStatus(trades.Count == 0
@@ -266,11 +280,58 @@ public class ImportPage : PageBase
 
             _preview = await _importService.PreviewAsync(_preview.Select(p => p.Trade));
             UpdatePreviewDisplay();
+
+            // Aktarımın hemen ardından görseller de indirilir.
+            if (_source is ChartVaultApiImporter chartVault && _settings.IsSiteConfigured)
+            {
+                (string shotMessage, Color shotColor) = await DownloadShotsAsync(chartVault);
+                SetStatus(message + "\n" + shotMessage, result.Failed > 0 ? Theme.Warning : shotColor);
+            }
         }
         catch (Exception ex)
         {
             ErrorHelper.Show(FindForm(), ex);
             UpdatePreviewDisplay();
+        }
+    }
+
+    private async Task DownloadShotsOnlyAsync()
+    {
+        if (_source is not ChartVaultApiImporter chartVault)
+        {
+            SetStatus("Önce \"Bağlan ve getir\" ile Chart Vault'a bağlan.", Theme.Warning);
+            return;
+        }
+        (string message, Color color) = await DownloadShotsAsync(chartVault);
+        SetStatus(message, color);
+    }
+
+    private async Task<(string Message, Color Color)> DownloadShotsAsync(ChartVaultApiImporter chartVault)
+    {
+        _shotsButton.Enabled = false;
+        var progress = new Progress<string>(text => SetStatus(text, Theme.TextMuted));
+        try
+        {
+            ShotDownloadResult r = await _importService.DownloadChartVaultShotsAsync(chartVault, progress);
+            if (r.Downloaded == 0 && r.Failed == 0)
+                return (r.AlreadyHad > 0 ? "Görseller zaten indirilmiş." : "Chart Vault'ta bu işlemlere bağlı görsel yok.", Theme.TextMuted);
+
+            string text = $"{r.Downloaded} görsel indirildi." +
+                          (r.Failed > 0 ? $" {r.Failed} görsel indirilemedi: {r.Errors.FirstOrDefault()}" : "");
+            return (text, r.Failed > 0 ? Theme.Warning : Theme.Profit);
+        }
+        catch (ImportException ex)
+        {
+            return (ex.Message, Theme.Warning);
+        }
+        catch (Exception ex)
+        {
+            ErrorHelper.Show(FindForm(), ex);
+            return ("Görseller indirilemedi.", Theme.Loss);
+        }
+        finally
+        {
+            _shotsButton.Enabled = _settings.IsSiteConfigured;
         }
     }
 

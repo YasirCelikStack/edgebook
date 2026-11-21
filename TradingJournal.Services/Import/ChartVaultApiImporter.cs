@@ -41,7 +41,7 @@ public class ChartVaultApiImporter : IJournalImporter
     {
         try
         {
-            string token = await SignInAsync(cancellationToken);
+            string token = await GetTokenAsync(cancellationToken);
             List<JournalEntryDto> entries = await GetEntriesAsync(token, cancellationToken);
             return entries.Select(Map).Where(t => t is not null).Select(t => t!).ToList();
         }
@@ -53,6 +53,87 @@ public class ChartVaultApiImporter : IJournalImporter
         {
             throw new ImportException("Chart Vault yanıt vermedi (zaman aşımı).", ex);
         }
+    }
+
+    // Giriş bir kez yapılır; aynı nesneyle yapılan sonraki istekler (görsel indirme) aynı anahtarı kullanır.
+    private string? _token;
+
+    private async Task<string> GetTokenAsync(CancellationToken ct) => _token ??= await SignInAsync(ct);
+
+    // ---------------- Görseller ----------------
+
+    // Verilen Journal kayıtlarının grafik görsellerini (imzalı indirme adresleriyle) getirir.
+    // Chart Vault'ta bu özellik henüz yoksa (404) anlaşılır bir hata verir.
+    public async Task<List<ChartVaultShot>> FetchShotsAsync(IReadOnlyCollection<string> journalIds, CancellationToken ct = default)
+    {
+        if (!_settings.IsSiteConfigured)
+            throw new ImportException("Chart Vault site adresi ayarlanmamış (appsettings.Local.json → ChartVault:SiteUrl). Görseller indirilemez.");
+
+        var shots = new List<ChartVaultShot>();
+        try
+        {
+            foreach (string[] chunk in journalIds.Distinct().Chunk(200))
+            {
+                string url = $"{_settings.SiteUrl.Trim().TrimEnd('/')}/api/journal/shots?ids={string.Join(",", chunk)}";
+                shots.AddRange(await GetShotsChunkAsync(url, retryOnUnauthorized: true, ct));
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ImportException("Chart Vault sitesine bağlanılamadı. Site adresini kontrol edin.", ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ImportException("Chart Vault sitesi yanıt vermedi (zaman aşımı).", ex);
+        }
+        return shots;
+    }
+
+    private async Task<List<ChartVaultShot>> GetShotsChunkAsync(string url, bool retryOnUnauthorized, CancellationToken ct)
+    {
+        string token = await GetTokenAsync(ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        using HttpResponseMessage response = await _http.SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.Unauthorized && retryOnUnauthorized)
+        {
+            _token = null; // Oturum süresi dolmuş olabilir: bir kez yeniden giriş yap.
+            return await GetShotsChunkAsync(url, retryOnUnauthorized: false, ct);
+        }
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            throw new ImportException("Chart Vault henüz işlem görsellerini paylaşmıyor. Chart Vault güncellendiğinde görseller buradan indirilebilecek.");
+        if (!response.IsSuccessStatusCode)
+            throw new ImportException($"Görsel listesi alınamadı ({(int)response.StatusCode}).");
+
+        ShotsResponse? body = await response.Content.ReadFromJsonAsync<ShotsResponse>(ct);
+        return body?.Shots ?? new List<ChartVaultShot>();
+    }
+
+    // İmzalı adresten görseli indirir. Dönen uzantı içerik türüne göredir (.webp, .png, .jpg).
+    public async Task<(MemoryStream Content, string Extension)> DownloadShotAsync(ChartVaultShot shot, CancellationToken ct = default)
+    {
+        using HttpResponseMessage response = await _http.GetAsync(shot.Url, ct);
+        if (!response.IsSuccessStatusCode)
+            throw new ImportException($"Görsel indirilemedi ({(int)response.StatusCode}).");
+
+        string type = response.Content.Headers.ContentType?.MediaType ?? shot.ContentType ?? "image/webp";
+        string extension = type switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            _ => ".webp"
+        };
+
+        var content = new MemoryStream();
+        await response.Content.CopyToAsync(content, ct);
+        content.Position = 0;
+        return (content, extension);
+    }
+
+    private sealed class ShotsResponse
+    {
+        [JsonPropertyName("shots")] public List<ChartVaultShot>? Shots { get; set; }
     }
 
     private async Task<string> SignInAsync(CancellationToken ct)

@@ -5,6 +5,11 @@
     <ProjectReference Include="..\TradingJournal.Data\TradingJournal.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Chart Vault görselleri WebP; Windows Forms WebP açamadığı için PNG'ye çevirmek için. -->
+    <PackageReference Include="SkiaSharp" Version="3.*" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
