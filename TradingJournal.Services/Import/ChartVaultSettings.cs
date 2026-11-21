@@ -1,42 +1,43 @@
 using System.Text.Json;
+using TradingJournal.Services.Configuration;
 
 namespace TradingJournal.Services.Import;
 
-// Chart Vault'un Supabase bağlantı bilgileri. Repoya girmez:
-// %LocalAppData%\EdgeBook\chartvault.json dosyasında saklanır. Şifre asla kaydedilmez.
+// Chart Vault bağlantısı için gereken bilgiler.
+// Supabase adresi ve publishable key uygulamanın ayarıdır (appsettings.Local.json), herkes için aynıdır.
+// Kullanıcıya ait olan tek şey e-posta adresidir; kolaylık olsun diye hatırlanır
+// (%LocalAppData%\EdgeBook\chartvault.json). Şifre asla kaydedilmez.
 public class ChartVaultSettings
 {
-    // Supabase > Project Settings > API: "Project URL" (https://xxxx.supabase.co)
-    public string SupabaseUrl { get; set; } = string.Empty;
-
-    // Supabase "Publishable key" (sb_publishable_...). Tarayıcıda zaten açık olan anahtardır;
-    // veriyi koruyan şey tablodaki RLS kuralıdır (herkes sadece kendi kayıtlarını görür).
-    public string PublishableKey { get; set; } = string.Empty;
+    public string SupabaseUrl => AppSettings.Current.ChartVault.SupabaseUrl;
+    public string PublishableKey => AppSettings.Current.ChartVault.PublishableKey;
+    public bool IsConfigured => AppSettings.Current.ChartVault.IsConfigured;
 
     public string? Email { get; set; }
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(SupabaseUrl) && !string.IsNullOrWhiteSpace(PublishableKey);
-
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeBook", "chartvault.json");
+
+    private sealed record Stored(string? Email);
 
     public static ChartVaultSettings Load()
     {
         try
         {
-            return File.Exists(FilePath)
-                ? JsonSerializer.Deserialize<ChartVaultSettings>(File.ReadAllText(FilePath)) ?? new()
-                : new();
+            if (!File.Exists(FilePath))
+                return new ChartVaultSettings();
+            Stored? stored = JsonSerializer.Deserialize<Stored>(File.ReadAllText(FilePath));
+            return new ChartVaultSettings { Email = stored?.Email };
         }
         catch (JsonException)
         {
-            return new();
+            return new ChartVaultSettings();
         }
     }
 
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(FilePath, JsonSerializer.Serialize(new Stored(Email)));
     }
 }

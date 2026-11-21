@@ -20,8 +20,6 @@ public class ImportPage : PageBase
     private readonly JournalImportService _importService = new();
     private readonly ChartVaultSettings _settings = ChartVaultSettings.Load();
 
-    private readonly TextEdit _url = new();
-    private readonly TextEdit _key = new();
     private readonly TextEdit _email = new();
     private readonly TextEdit _password = new();
     private readonly LookUpEdit _account = EditorFactory.Lookup(nameof(Account.Name));
@@ -41,10 +39,6 @@ public class ImportPage : PageBase
     {
         _password.Properties.UseSystemPasswordChar = true;
         _risk.Value = 1m;
-        _url.Properties.NullValuePrompt = "https://xxxx.supabase.co";
-        _key.Properties.NullValuePrompt = "sb_publishable_...";
-        _url.Text = _settings.SupabaseUrl;
-        _key.Text = _settings.PublishableKey;
         _email.Text = _settings.Email;
 
         _fetchButton.Click += async (_, _) => await FetchAsync();
@@ -101,9 +95,27 @@ public class ImportPage : PageBase
                 table.Controls.Add(new Label { Text = hint, AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = Theme.TextFaint, Font = Theme.Small, Margin = new Padding(0, 2, 0, 0) });
         }
 
-        Field("Supabase proje adresi", _url, "Supabase > Project Settings > API > Project URL. Chart Vault'un .env dosyasındaki NEXT_PUBLIC_SUPABASE_URL.");
-        Field("Publishable key", _key, "NEXT_PUBLIC_SUPABASE_ANON_KEY değeri. Bilgisayarında saklanır, repoya girmez.");
-        Field("Chart Vault e-posta", _email);
+        table.Controls.Add(new Label
+        {
+            Text = "Chart Vault hesabınla giriş yap. EdgeBook kayıtlarını sadece okur; Chart Vault'ta hiçbir şey değişmez.",
+            AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = Theme.TextMuted, Font = Theme.Body,
+            Margin = new Padding(0, 0, 0, 4)
+        });
+
+        if (!_settings.IsConfigured)
+        {
+            // Uygulamayı dağıtan kişinin (geliştiricinin) bir kez yapması gereken ayar.
+            _fetchButton.Enabled = false;
+            table.Controls.Add(new Label
+            {
+                Text = "Chart Vault bağlantısı bu kurulumda ayarlanmamış. Geliştirici: exe'nin yanına " +
+                       "appsettings.Local.json dosyasını ekleyin (örneği: appsettings.Local.example.json).",
+                AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = Theme.Warning, Font = Theme.Small,
+                Margin = new Padding(0, 4, 0, 4)
+            });
+        }
+
+        Field("E-posta", _email);
         Field("Şifre", _password, "Şifre kaydedilmez, sadece giriş için kullanılır.");
         _fetchButton.Margin = new Padding(0, 12, 0, 8);
         table.Controls.Add(_fetchButton);
@@ -204,8 +216,6 @@ public class ImportPage : PageBase
 
     private async Task FetchAsync()
     {
-        _settings.SupabaseUrl = _url.Text.Trim();
-        _settings.PublishableKey = _key.Text.Trim();
         _settings.Email = _email.Text.Trim();
 
         _fetchButton.Enabled = false;
@@ -214,7 +224,7 @@ public class ImportPage : PageBase
         {
             _source = new ChartVaultApiImporter(_settings, _email.Text, _password.Text);
             IReadOnlyList<ImportedTrade> trades = await _source.FetchAsync();
-            _settings.Save(); // Bağlantı çalıştıysa adresi ve key'i hatırla.
+            _settings.Save(); // Giriş başarılıysa e-postayı hatırla (şifre kaydedilmez).
             _preview = await _importService.PreviewAsync(trades);
             UpdatePreviewDisplay();
             SetStatus(trades.Count == 0

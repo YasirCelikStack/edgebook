@@ -23,7 +23,7 @@ public class ChartVaultApiImporter : IJournalImporter
     public ChartVaultApiImporter(ChartVaultSettings settings, string email, string password, HttpClient? http = null)
     {
         if (!settings.IsConfigured)
-            throw new ImportException("Önce Supabase adresini ve publishable key'i girin.");
+            throw new ImportException("Chart Vault bağlantı ayarları eksik (appsettings.Local.json).");
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
             throw new ImportException("Chart Vault e-posta ve şifrenizi girin.");
 

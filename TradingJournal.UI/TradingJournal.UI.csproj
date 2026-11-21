@@ -23,6 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Geliştirici ayarları (Chart Vault bağlantısı, ileride yapay zeka anahtarı). Dosya varsa exe'nin yanına kopyalanır. -->
+    <None Update="appsettings.Local.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- DevExpress kurulumu "DevExpress XX.X Local" NuGet kaynağını ekler; paket oradan gelir. -->
     <PackageReference Include="DevExpress.Win.Design" Version="$(DevExpressVersion)" />
     <PackageReference Include="DevExpress.Win.Charts" Version="$(DevExpressVersion)" />
