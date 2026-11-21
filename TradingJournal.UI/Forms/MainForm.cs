@@ -51,6 +51,7 @@ public class MainForm : XtraForm
             ["dashboard"] = new DashboardPage(_state),
             ["trades"] = trades,
             ["calendar"] = calendar,
+            ["analytics"] = new AnalyticsPage(_state),
             ["definitions"] = new DefinitionsPage(_state),
             ["import"] = new ImportPage(_state)
         };
@@ -58,6 +59,7 @@ public class MainForm : XtraForm
         _sidebar.AddItem("dashboard", "Panel", Theme.Glyph.Dashboard);
         _sidebar.AddItem("trades", "İşlemler", Theme.Glyph.List);
         _sidebar.AddItem("calendar", "Takvim", Theme.Glyph.Calendar);
+        _sidebar.AddItem("analytics", "Analiz", "\uE9D2");
         _sidebar.AddItem("definitions", "Tanımlar", Theme.Glyph.Settings);
         _sidebar.AddItem("import", "Chart Vault", "\uE895");
         _sidebar.ItemSelected += async (_, key) => await NavigateAsync(key);

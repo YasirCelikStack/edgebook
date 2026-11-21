@@ -53,6 +53,7 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **Panel:** KPI kartları (net kâr, win rate, profit factor, ortalama R, beklenti, max drawdown), equity curve, R dağılımı, seans performansı ve hesabın risk kuralı doluluk çubukları.
 - **İşlemler:** Sade işlem listesi ve sağda detay paneli: sonuç, risk/ödül çubuğu, detaylar, etiketler, notlar. **Chart ekran görüntüleri** dosyadan, sürükle-bırak ile veya **Ctrl+V** ile panodan eklenir. Görüntüler `%LocalAppData%\EdgeBook\screenshots` klasöründe saklanır.
 - **Takvim:** Günlük net sonuç takvimi ve haftalık toplamlar. Bir güne tıklayınca o günün işlemleri listelenir.
+- **Analiz:** DevExpress `PivotGridControl` ile çapraz tablolar. Hazır analizler: Seans × Yön, Sembol × Seans × Yön (ör. "Asya'da EURUSD Long işlemlerin başarı oranı"), Killzone, Gün × Saat, İşlemde kalma süresi, Risk büyüklüğü, Strateji, Aylık. Alanlar sürükle-bırak ile değiştirilebilir, tablo Excel'e aktarılabilir. Sağ panelde davranış istatistikleri (işlemde kalma süresi, ortalama risk, planlanan RR, seriler) ve en güçlü / en zayıf sembol-seans-yön kombinasyonları. Seanslar New York saatine göre, yaz/kış saati farkı dahil dakika hassasiyetinde hesaplanır.
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
 
 ## Chart Vault entegrasyonu
