@@ -50,6 +50,9 @@ public class TradeEditForm : DialogFormBase
     private readonly LayoutControlItem _exitPriceItem;
     private readonly LayoutControlItem _closeTimeItem;
 
+    // Kaydedilen işlemin Id'si: yeni işlem eklenince listede onu seçmek için.
+    public int? SavedTradeId => _trade?.Id;
+
     public TradeEditForm(int? tradeId = null)
         : base(tradeId is null ? "Yeni işlem" : "İşlemi düzenle", width: 520)
     {

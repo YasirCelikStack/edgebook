@@ -56,6 +56,10 @@ public abstract class EntityListForm<T> : XtraForm where T : BaseEntity, new()
     // Silmeden önce sorulacak soru. Hesap gibi ilişkili kaydı olanlar daha ciddi uyarı verebilir.
     protected virtual string GetDeleteMessage(T entity) => $"\"{entity}\" silinsin mi?";
 
+    // Listeyi yükler. İlişkili verisi de gereken tablolar (hesap + kuralları gibi) bunu ezer.
+    protected virtual Task<List<T>> LoadItemsAsync(TradingJournalDbContext db)
+        => new Repository<T>(db).GetAllAsync();
+
     // --- Ortak davranış ---
 
     protected GridColumn AddColumn(string fieldName, string caption, string? format = null, int width = 0)
@@ -84,8 +88,7 @@ public abstract class EntityListForm<T> : XtraForm where T : BaseEntity, new()
         {
             // Her işlem kendi kısa ömürlü DbContext'ini kullanır: veriler hep güncel kalır.
             using var db = DbContextFactory.Create();
-            var repository = new Repository<T>(db);
-            Grid.DataSource = await repository.GetAllAsync();
+            Grid.DataSource = await LoadItemsAsync(db);
         }
         catch (Exception ex)
         {

@@ -31,6 +31,8 @@ public class TradeRow
     public string Status => IsClosed ? "Kapalı" : "Açık";
     public string Tags { get; init; } = string.Empty;
     public int? Rating { get; init; }
+    public int ScreenshotCount { get; set; }
+    public string DirectionText => Direction == TradeDirection.Long ? "▲ Long" : "▼ Short";
     public string Stars => Rating is int r ? new string('★', r) : string.Empty;
 
     public static TradeRow From(Trade trade) => new()

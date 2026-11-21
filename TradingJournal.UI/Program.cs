@@ -13,7 +13,9 @@ static class Program
     static void Main()
     {
         ApplicationConfiguration.Initialize();
-        UserLookAndFeel.Default.SetSkinStyle(SkinStyle.WXI);
+        // WXI temasının koyu paleti; kendi çizdiğimiz kartlar Theme sınıfındaki renkleri kullanır.
+        UserLookAndFeel.Default.SetSkinStyle("WXI", "Darkness");
+        WindowsFormsSettings.DefaultFont = new Font("Segoe UI", 9.75f);
 
         // Yakalanmayan hatalar uygulamayı çökertmesin, kullanıcıya anlaşılır mesaj gösterilsin.
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

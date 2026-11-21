@@ -20,6 +20,7 @@
   <ItemGroup>
     <!-- DevExpress kurulumu "DevExpress XX.X Local" NuGet kaynağını ekler; paket oradan gelir. -->
     <PackageReference Include="DevExpress.Win.Design" Version="$(DevExpressVersion)" />
+    <PackageReference Include="DevExpress.Win.Charts" Version="$(DevExpressVersion)" />
   </ItemGroup>
 
 </Project>

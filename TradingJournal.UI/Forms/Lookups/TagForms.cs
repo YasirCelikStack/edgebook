@@ -3,6 +3,7 @@ using DevExpress.XtraEditors;
 using DevExpress.XtraGrid.Views.Base;
 using TradingJournal.Core.Entities;
 using TradingJournal.UI.Forms.Base;
+using TradingJournal.UI.Helpers;
 // Form sınıfının içinde "Tag" yazınca Control.Tag özelliği anlaşılıyor; entity için takma ad kullanıyoruz.
 using TagEntity = TradingJournal.Core.Entities.Tag;
 
@@ -23,28 +24,12 @@ public class TagListForm : EntityListForm<Tag>
         {
             if (e.Column.FieldName != nameof(TagEntity.ColorHex) || e.CellValue is not string hex)
                 return;
-            if (TryParseColor(hex, out Color color))
+            if (ColorParser.TryParse(hex, out Color color))
                 e.Appearance.BackColor = color;
         };
     }
 
     protected override EntityEditForm<Tag> CreateEditor(Tag entity) => new TagEditForm(entity);
-
-    internal static bool TryParseColor(string? hex, out Color color)
-    {
-        color = Color.Empty;
-        if (string.IsNullOrWhiteSpace(hex))
-            return false;
-        try
-        {
-            color = ColorTranslator.FromHtml(hex);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
 }
 
 [DesignerCategory("Code")]
@@ -64,13 +49,12 @@ public class TagEditForm : EntityEditForm<Tag>
     protected override void LoadValues()
     {
         _name.Text = Entity.Name;
-        _color.Color = TagListForm.TryParseColor(Entity.ColorHex, out Color color) ? color : Color.SteelBlue;
+        _color.Color = ColorParser.TryParse(Entity.ColorHex, out Color color) ? color : Color.SteelBlue;
     }
 
     protected override void ApplyValues()
     {
         Entity.Name = _name.Text;
-        Color c = _color.Color;
-        Entity.ColorHex = c.IsEmpty ? null : $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        Entity.ColorHex = _color.Color.IsEmpty ? null : ColorParser.ToHex(_color.Color);
     }
 }

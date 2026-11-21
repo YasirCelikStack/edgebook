@@ -1,360 +1,202 @@
 using System.ComponentModel;
-using DevExpress.Data;
-using DevExpress.Utils;
-using DevExpress.XtraBars;
-using DevExpress.XtraBars.Ribbon;
 using DevExpress.XtraEditors;
-using DevExpress.XtraGrid;
-using DevExpress.XtraGrid.Columns;
-using DevExpress.XtraGrid.Views.Grid;
+using DevExpress.XtraEditors.Controls;
 using TradingJournal.Core.Entities;
-using TradingJournal.Data;
-using TradingJournal.Data.Repositories;
-using TradingJournal.Services.Statistics;
-using TradingJournal.UI.Forms.Lookups;
+using TradingJournal.UI.Controls;
 using TradingJournal.UI.Forms.Trades;
 using TradingJournal.UI.Helpers;
-using TradingJournal.UI.Models;
+using TradingJournal.UI.Pages;
+using TradingJournal.UI.Theming;
 
 namespace TradingJournal.UI.Forms;
 
-// Uygulamanın ana penceresi: üstte Ribbon menü, ortada filtrelenebilir işlem listesi,
-// altta seçili/filtrelenmiş işlemlerin özet istatistikleri.
+// Ana pencere: solda menü, üstte sayfa başlığı + hesap seçici + "Yeni işlem",
+// ortada seçili sayfa. Sayfalar bir kez oluşturulur ve tekrar kullanılır.
 [DesignerCategory("Code")]
-public class MainForm : RibbonForm
+public class MainForm : XtraForm
 {
-    private static readonly Color ProfitColor = Color.FromArgb(46, 125, 50);
-    private static readonly Color LossColor = Color.FromArgb(198, 40, 40);
+    private readonly AppState _state = new();
+    private readonly Sidebar _sidebar = new();
+    private readonly Panel _content = new() { Dock = DockStyle.Fill, BackColor = Theme.Background, Padding = new Padding(16, 0, 24, 24) };
+    private readonly Panel _topBar = new() { Dock = DockStyle.Top, Height = 84, BackColor = Theme.Background };
+    private readonly Label _title = new() { AutoSize = true, Font = Theme.Title, ForeColor = Theme.Text, Location = new Point(22, 18) };
+    private readonly Label _subtitle = new() { AutoSize = true, Font = Theme.Body, ForeColor = Theme.TextMuted, Location = new Point(24, 50) };
+    private readonly ImageComboBoxEdit _accountPicker = new() { Width = 230 };
+    private readonly FlatButton _newTradeButton = new("Yeni işlem", Theme.Glyph.Add, primary: true);
 
-    // Arayüz somut sınıfa değil arayüze bağlı: ileride başka bir hesaplayıcı takılabilir.
-    private readonly IStatisticsService _statistics = new StatisticsService();
-
-    private readonly RibbonControl _ribbon = new();
-    private readonly GridControl _grid = new() { Dock = DockStyle.Fill };
-    private readonly GridView _view;
-
-    private BarButtonItem _editButton = null!;
-    private BarButtonItem _closeButton = null!;
-    private BarButtonItem _deleteButton = null!;
-    private readonly BarStaticItem _countLabel = new();
-    private readonly BarStaticItem _statsLabel = new();
-
-    // Grid'de gösterilen satırların arkasındaki gerçek Trade nesneleri (istatistik için).
-    private Dictionary<int, Trade> _tradesById = new();
+    private readonly Dictionary<string, PageBase> _pages;
+    private PageBase? _currentPage;
+    private bool _loadingAccounts;
 
     public MainForm()
     {
         Text = "EdgeBook — Trading Journal";
-        ClientSize = new Size(1280, 760);
+        ClientSize = new Size(1440, 860);
+        MinimumSize = new Size(1150, 700);
         StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Theme.Background;
+        KeyPreview = true;
 
-        _view = new GridView(_grid);
-        _grid.MainView = _view;
+        var trades = new TradesPage(_state);
+        var calendar = new CalendarPage(_state);
+        calendar.DaySelected += async (_, day) =>
+        {
+            _sidebar.Select("trades");
+            await Task.Yield();
+            trades.FilterByDay(day);
+        };
 
-        BuildRibbon();
-        RibbonStatusBar statusBar = BuildStatusBar();
-        ConfigureGrid();
+        _pages = new Dictionary<string, PageBase>
+        {
+            ["dashboard"] = new DashboardPage(_state),
+            ["trades"] = trades,
+            ["calendar"] = calendar,
+            ["definitions"] = new DefinitionsPage(_state)
+        };
 
-        // Sıra önemli: önce Fill olan grid, sonra kenara yapışanlar eklenir.
-        Controls.Add(_grid);
-        Controls.Add(statusBar);
-        Controls.Add(_ribbon);
-        Ribbon = _ribbon;
-        StatusBar = statusBar;
+        _sidebar.AddItem("dashboard", "Panel", Theme.Glyph.Dashboard);
+        _sidebar.AddItem("trades", "İşlemler", Theme.Glyph.List);
+        _sidebar.AddItem("calendar", "Takvim", Theme.Glyph.Calendar);
+        _sidebar.AddItem("definitions", "Tanımlar", Theme.Glyph.Settings);
+        _sidebar.ItemSelected += async (_, key) => await NavigateAsync(key);
+
+        BuildTopBar();
+
+        // Sıra: önce Fill olan içerik, sonra üst çubuk, en son sol menü.
+        var right = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        right.Controls.Add(_content);
+        right.Controls.Add(_topBar);
+        Controls.Add(right);
+        Controls.Add(_sidebar);
+
+        _state.AccountChanged += async (_, _) =>
+        {
+            if (_currentPage is not null)
+                await SafeRefreshAsync(_currentPage);
+        };
     }
 
     protected override async void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        await ReloadAsync();
+        await LoadAccountsAsync();
+        _sidebar.Select("dashboard");
     }
 
-    // ---------------- Ribbon ----------------
-
-    private void BuildRibbon()
+    private void BuildTopBar()
     {
-        _ribbon.ShowApplicationButton = DefaultBoolean.False;
-        _ribbon.ToolbarLocation = RibbonQuickAccessToolbarLocation.Hidden;
-        _ribbon.ShowExpandCollapseButton = DefaultBoolean.False;
-
-        var journalPage = new RibbonPage("Günlük");
-
-        var tradeGroup = new RibbonPageGroup("İşlem") { AllowTextClipping = false };
-        tradeGroup.ItemLinks.Add(CreateButton("Yeni işlem", "Add", Keys.Control | Keys.N, async () => await NewTradeAsync()));
-        _editButton = CreateButton("Düzenle", "Edit", Keys.F2, async () => await EditTradeAsync());
-        _closeButton = CreateButton("İşlemi kapat", "Apply", Keys.Control | Keys.K, async () => await CloseTradeAsync());
-        _deleteButton = CreateButton("Sil", "Delete", Keys.None, async () => await DeleteTradeAsync());
-        tradeGroup.ItemLinks.Add(_editButton);
-        tradeGroup.ItemLinks.Add(_closeButton);
-        tradeGroup.ItemLinks.Add(_deleteButton);
-
-        var viewGroup = new RibbonPageGroup("Liste") { AllowTextClipping = false };
-        viewGroup.ItemLinks.Add(CreateButton("Yenile", "Refresh", Keys.F5, async () => await ReloadAsync()));
-        viewGroup.ItemLinks.Add(CreateButton("Filtreleri temizle", "ClearFilter", Keys.None, () =>
+        _accountPicker.Properties.Buttons[0].Kind = ButtonPredefines.Combo;
+        _accountPicker.Properties.TextEditStyle = DevExpress.XtraEditors.Controls.TextEditStyles.DisableTextEditor;
+        _accountPicker.EditValueChanged += (_, _) =>
         {
-            _view.ActiveFilter.Clear();
-            _view.ApplyFindFilter(string.Empty);
-            return Task.CompletedTask;
-        }));
-
-        var lookupGroup = new RibbonPageGroup("Tanımlar") { AllowTextClipping = false };
-        lookupGroup.ItemLinks.Add(CreateButton("Hesaplar", "BOContact", Keys.None, () => OpenLookupAsync(new AccountListForm())));
-        lookupGroup.ItemLinks.Add(CreateButton("Enstrümanlar", "BOProduct", Keys.None, () => OpenLookupAsync(new InstrumentListForm())));
-        lookupGroup.ItemLinks.Add(CreateButton("Stratejiler", "BOTask", Keys.None, () => OpenLookupAsync(new StrategyListForm())));
-        lookupGroup.ItemLinks.Add(CreateButton("Etiketler", "Tag", Keys.None, () => OpenLookupAsync(new TagListForm())));
-
-        journalPage.Groups.Add(tradeGroup);
-        journalPage.Groups.Add(viewGroup);
-        journalPage.Groups.Add(lookupGroup);
-
-        var appearancePage = new RibbonPage("Görünüm");
-        var skinGroup = new RibbonPageGroup("Tema");
-        var skinGallery = new SkinRibbonGalleryBarItem();
-        _ribbon.Items.Add(skinGallery);
-        skinGroup.ItemLinks.Add(skinGallery);
-        appearancePage.Groups.Add(skinGroup);
-
-        _ribbon.Pages.Add(journalPage);
-        _ribbon.Pages.Add(appearancePage);
-    }
-
-    private BarButtonItem CreateButton(string caption, string imageName, Keys shortcut, Func<Task> onClick)
-    {
-        var button = new BarButtonItem
-        {
-            Caption = caption,
-            RibbonStyle = RibbonItemStyles.Large
-        };
-        // DevExpress'in hazır ikon kütüphanesinden (DX Image Gallery) isimle ikon alır.
-        button.ImageOptions.ImageUri.Uri = imageName;
-        if (shortcut != Keys.None)
-            button.ItemShortcut = new BarShortcut(shortcut);
-
-        button.ItemClick += async (_, _) =>
-        {
-            try
-            {
-                await onClick();
-            }
-            catch (Exception ex)
-            {
-                ErrorHelper.Show(this, ex);
-            }
+            if (_loadingAccounts) return;
+            int value = _accountPicker.EditValue is int v ? v : -1;
+            _state.SelectAccount(value < 0 ? null : value);
         };
 
-        _ribbon.Items.Add(button);
-        return button;
+        _newTradeButton.Click += async (_, _) => await NewTradeAsync();
+
+        _topBar.Controls.AddRange([_title, _subtitle, _accountPicker, _newTradeButton]);
+        _topBar.Resize += (_, _) => PositionTopBarControls();
+        PositionTopBarControls();
     }
 
-    private RibbonStatusBar BuildStatusBar()
+    private void PositionTopBarControls()
     {
-        var statusBar = new RibbonStatusBar { Ribbon = _ribbon };
-        _ribbon.Items.Add(_countLabel);
-        _ribbon.Items.Add(_statsLabel);
-        statusBar.ItemLinks.Add(_countLabel);
-        statusBar.ItemLinks.Add(_statsLabel, true);
-        return statusBar;
+        _newTradeButton.Location = new Point(_topBar.Width - _newTradeButton.Width - 24, 24);
+        _accountPicker.Location = new Point(_newTradeButton.Left - _accountPicker.Width - 12, 30);
     }
 
-    // ---------------- Grid ----------------
-
-    private void ConfigureGrid()
+    // Hesap listesini yeniler; seçili hesabı korur (Tanımlar'da hesap eklenmiş/silinmiş olabilir).
+    private async Task LoadAccountsAsync()
     {
-        _view.OptionsBehavior.Editable = false;
-        _view.OptionsBehavior.AutoPopulateColumns = false;
-        _view.OptionsView.ShowAutoFilterRow = true;
-        _view.OptionsView.ShowFooter = true;
-        _view.OptionsView.ShowGroupPanel = true;
-        _view.OptionsView.ColumnAutoWidth = false;
-        _view.OptionsFind.AlwaysVisible = true;
-        _view.OptionsSelection.EnableAppearanceFocusedCell = false;
-        _view.GroupPanelText = "Gruplamak için bir sütun başlığını buraya sürükleyin (örn. Seans, Strateji)";
-
-        AddDateColumn(nameof(TradeRow.OpenTime), "Açılış");
-        AddColumn(nameof(TradeRow.Account), "Hesap", width: 130);
-        GridColumn symbol = AddColumn(nameof(TradeRow.Symbol), "Sembol", width: 85);
-        AddColumn(nameof(TradeRow.Market), "Piyasa", width: 65);
-        AddColumn(nameof(TradeRow.Direction), "Yön", width: 60);
-        AddColumn(nameof(TradeRow.Session), "Seans", width: 80);
-        AddColumn(nameof(TradeRow.Strategy), "Strateji", width: 140);
-        AddColumn(nameof(TradeRow.EntryPrice), "Giriş", "0.#####");
-        AddColumn(nameof(TradeRow.StopLoss), "Stop", "0.#####");
-        AddColumn(nameof(TradeRow.TakeProfit), "Hedef", "0.#####");
-        AddColumn(nameof(TradeRow.ExitPrice), "Çıkış", "0.#####");
-        AddColumn(nameof(TradeRow.Size), "Boyut", width: 100);
-        AddColumn(nameof(TradeRow.Risk), "Risk", "n2");
-        GridColumn pnl = AddColumn(nameof(TradeRow.NetPnL), "Net PnL", "n2", width: 90);
-        GridColumn r = AddColumn(nameof(TradeRow.RMultiple), "R", "0.00", width: 60);
-        AddColumn(nameof(TradeRow.Status), "Durum", width: 65);
-        AddColumn(nameof(TradeRow.Tags), "Etiketler", width: 160);
-        AddColumn(nameof(TradeRow.Stars), "Puan", width: 70);
-        AddDateColumn(nameof(TradeRow.CloseTime), "Kapanış");
-
-        // Alt satırdaki toplamlar ve grup başlıklarındaki ara toplamlar.
-        symbol.Summary.Add(SummaryItemType.Count, symbol.FieldName, "{0} işlem");
-        pnl.Summary.Add(SummaryItemType.Sum, pnl.FieldName, "{0:n2}");
-        r.Summary.Add(SummaryItemType.Sum, r.FieldName, "{0:0.00}R");
-        _view.GroupSummary.Add(SummaryItemType.Count, symbol.FieldName, null, "({0} işlem)");
-        _view.GroupSummary.Add(SummaryItemType.Sum, pnl.FieldName, pnl, "{0:n2}");
-        _view.GroupSummary.Add(SummaryItemType.Sum, r.FieldName, r, "{0:0.00}R");
-
-        _view.RowCellStyle += (_, e) =>
+        List<Account> accounts;
+        try
         {
-            if (e.Column.FieldName is nameof(TradeRow.NetPnL) or nameof(TradeRow.RMultiple) && e.CellValue is decimal value)
-            {
-                if (value > 0) e.Appearance.ForeColor = ProfitColor;
-                else if (value < 0) e.Appearance.ForeColor = LossColor;
-                e.Appearance.FontStyleDelta = FontStyle.Bold;
-            }
-        };
-
-        _view.CustomDrawEmptyForeground += (_, e) =>
-        {
-            string text = _tradesById.Count == 0
-                ? "Henüz işlem yok. \"Yeni işlem\" ile ilk işlemini ekle (Ctrl+N)."
-                : "Filtreye uyan işlem yok.";
-            e.Appearance.ForeColor = Color.Gray;
-            e.Appearance.TextOptions.HAlignment = HorzAlignment.Center;
-            e.Appearance.TextOptions.VAlignment = VertAlignment.Center;
-            e.Appearance.DrawString(e.Cache, text, e.Bounds);
-            e.Handled = true;
-        };
-
-        _view.DoubleClick += async (_, _) => await EditTradeAsync();
-        _view.FocusedRowChanged += (_, _) => UpdateButtonStates();
-        _view.ColumnFilterChanged += (_, _) => UpdateStatistics();
-    }
-
-    private GridColumn AddColumn(string fieldName, string caption, string? numberFormat = null, int width = 75)
-    {
-        GridColumn column = _view.Columns.AddVisible(fieldName, caption);
-        column.Width = width;
-        if (numberFormat is not null)
-        {
-            column.DisplayFormat.FormatType = FormatType.Numeric;
-            column.DisplayFormat.FormatString = numberFormat;
+            accounts = await _state.LoadAccountsAsync();
         }
-        return column;
+        catch (Exception ex)
+        {
+            ErrorHelper.Show(this, ex);
+            return;
+        }
+
+        _loadingAccounts = true;
+        _accountPicker.Properties.Items.Clear();
+        _accountPicker.Properties.Items.Add(new ImageComboBoxItem("Tüm hesaplar", -1));
+        foreach (Account account in accounts)
+            _accountPicker.Properties.Items.Add(new ImageComboBoxItem($"{account.Name} · {account.Type}", account.Id));
+
+        bool stillExists = _state.AccountId is int id && accounts.Any(a => a.Id == id);
+        _accountPicker.EditValue = stillExists ? _state.AccountId!.Value : -1;
+        _loadingAccounts = false;
+
+        if (!stillExists)
+            _state.SelectAccount(null);
     }
 
-    private void AddDateColumn(string fieldName, string caption)
+    private async Task NavigateAsync(string key)
     {
-        GridColumn column = AddColumn(fieldName, caption, width: 115);
-        column.DisplayFormat.FormatType = FormatType.DateTime;
-        column.DisplayFormat.FormatString = "dd.MM.yyyy HH:mm";
+        if (!_pages.TryGetValue(key, out PageBase? page))
+            return;
+
+        // Tanımlar sayfasından çıkarken hesaplar değişmiş olabilir.
+        if (_currentPage is DefinitionsPage)
+            await LoadAccountsAsync();
+
+        if (_currentPage != page)
+        {
+            _content.SuspendLayout();
+            _content.Controls.Clear();
+            _content.Controls.Add(page);
+            _content.ResumeLayout();
+            _currentPage = page;
+        }
+
+        _title.Text = page.Title;
+        _subtitle.Text = page.Subtitle;
+        await SafeRefreshAsync(page);
     }
 
-    // ---------------- Veri ----------------
-
-    private async Task ReloadAsync()
+    private async Task SafeRefreshAsync(PageBase page)
     {
         try
         {
-            int? focusedId = FocusedRow?.Id;
-
-            using var db = DbContextFactory.Create();
-            List<Trade> trades = await new TradeRepository(db).GetAllWithDetailsAsync();
-
-            _tradesById = trades.ToDictionary(t => t.Id);
-            _grid.DataSource = trades.Select(TradeRow.From).ToList();
-
-            if (focusedId is int id)
-                _view.FocusedRowHandle = _view.LocateByValue(nameof(TradeRow.Id), id);
+            UseWaitCursor = true;
+            await page.RefreshAsync();
         }
         catch (Exception ex)
         {
             ErrorHelper.Show(this, ex);
         }
-
-        UpdateButtonStates();
-        UpdateStatistics();
-    }
-
-    private TradeRow? FocusedRow => _view.GetFocusedRow() as TradeRow;
-
-    private void UpdateButtonStates()
-    {
-        TradeRow? row = FocusedRow;
-        _editButton.Enabled = row is not null;
-        _deleteButton.Enabled = row is not null;
-        _closeButton.Enabled = row is { IsClosed: false };
-    }
-
-    // Durum çubuğu, o an grid'de görünen (filtrelenmiş) işlemlerin istatistiğini gösterir.
-    // Örneğin "Seans = Londra" filtresi verilince sadece Londra işlemlerinin win rate'i görünür.
-    private void UpdateStatistics()
-    {
-        var visibleTrades = new List<Trade>();
-        for (int handle = 0; handle < _view.DataRowCount; handle++)
+        finally
         {
-            if (_view.GetRow(handle) is TradeRow row && _tradesById.TryGetValue(row.Id, out Trade? trade))
-                visibleTrades.Add(trade);
+            UseWaitCursor = false;
         }
-
-        int openCount = visibleTrades.Count(t => !t.IsClosed);
-        _countLabel.Caption = $"{visibleTrades.Count} işlem ({openCount} açık)";
-
-        TradeStatistics s = _statistics.Calculate(visibleTrades);
-        _statsLabel.Caption = s.TotalTrades == 0
-            ? "Kapanmış işlem yok"
-            : $"Win rate: %{s.WinRate:0.#}   |   Net: {s.NetProfit:n2}   |   " +
-              $"Profit factor: {(s.ProfitFactor is decimal pf ? pf.ToString("0.00") : "-")}   |   " +
-              $"Ort. R: {(s.AverageR is decimal ar ? ar.ToString("0.00") : "-")}   |   " +
-              $"Beklenti: {s.Expectancy:n2}   |   Max DD: {s.MaxDrawdown:n2}";
     }
-
-    // ---------------- İşlem komutları ----------------
 
     private async Task NewTradeAsync()
     {
         using var form = new TradeEditForm();
-        if (form.ShowDialog(this) == DialogResult.OK)
-            await ReloadAsync();
-    }
-
-    private async Task EditTradeAsync()
-    {
-        if (FocusedRow is not TradeRow row)
-            return;
-
-        using var form = new TradeEditForm(row.Id);
-        if (form.ShowDialog(this) == DialogResult.OK)
-            await ReloadAsync();
-    }
-
-    private async Task CloseTradeAsync()
-    {
-        if (FocusedRow is not { IsClosed: false } row)
-            return;
-
-        using var form = new CloseTradeForm(row.Id);
         if (form.ShowDialog(this) != DialogResult.OK)
             return;
 
-        await ReloadAsync();
-        XtraMessageBox.Show(this, form.ResultMessage, "İşlem kapatıldı",
-            MessageBoxButtons.OK, MessageBoxIcon.Information);
+        // Yeni işlemi İşlemler sayfasında seçili göster: hemen SS eklenebilsin.
+        var trades = (TradesPage)_pages["trades"];
+        _sidebar.Select("trades");
+        await Task.Yield();
+        await trades.RefreshAsync();
+        if (form.SavedTradeId is int id)
+            trades.SelectTrade(id);
     }
 
-    private async Task DeleteTradeAsync()
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (FocusedRow is not TradeRow row)
-            return;
-        if (!ErrorHelper.Confirm(this, $"{row.OpenTime:dd.MM.yyyy HH:mm} tarihli {row.Symbol} işlemi silinsin mi?"))
-            return;
-
-        using (var db = DbContextFactory.Create())
-            await new TradeRepository(db).DeleteAsync(row.Id);
-
-        await ReloadAsync();
-    }
-
-    private async Task OpenLookupAsync(XtraForm form)
-    {
-        using (form)
-            form.ShowDialog(this);
-
-        // Hesap/enstrüman adı değişmiş olabilir, listeyi tazele.
-        await ReloadAsync();
+        if (keyData == (Keys.Control | Keys.N))
+        {
+            _ = NewTradeAsync();
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 }

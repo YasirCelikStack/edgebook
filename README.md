@@ -48,9 +48,11 @@ Uygulama ilk açılışta veritabanını kendisi oluşturur (`Database.Migrate()
 
 ## Arayüz
 
-- **Ana pencere:** Ribbon menü + `GridControl` işlem listesi (otomatik filtre satırı, arama, sütuna göre gruplama, PnL/R ara toplamları). Durum çubuğu, o an filtrelenmiş işlemlerin win rate, profit factor, ortalama R ve max drawdown değerlerini gösterir.
-- **İşlem formu:** Enstrüman türüne göre `ForexTrade` (lot) veya `CryptoTrade` (miktar + kaldıraç) oluşturur; etiket, strateji, puan ve not girilir.
-- **İşlemi kapat:** `Trade.Close()` ile çıkış fiyatı ve zamanı kaydedilir, sonuç (Net PnL, R) gösterilir.
-- **Tanımlar:** Hesap, enstrüman, strateji ve etiket ekranları tek bir generic `EntityListForm<T>` sınıfından türer.
+Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi.
+
+- **Panel:** KPI kartları (net kâr, win rate, profit factor, ortalama R, beklenti, max drawdown), equity curve, R dağılımı, seans performansı ve hesabın risk kuralı doluluk çubukları.
+- **İşlemler:** Sade işlem listesi ve sağda detay paneli: sonuç, risk/ödül çubuğu, detaylar, etiketler, notlar. **Chart ekran görüntüleri** dosyadan, sürükle-bırak ile veya **Ctrl+V** ile panodan eklenir. Görüntüler `%LocalAppData%\EdgeBook\screenshots` klasöründe saklanır.
+- **Takvim:** Günlük net sonuç takvimi ve haftalık toplamlar. Bir güne tıklayınca o günün işlemleri listelenir.
+- **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
 
 *(Yapay zeka ayarları geliştikçe eklenecek.)*
