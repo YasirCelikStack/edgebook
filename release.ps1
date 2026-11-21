@@ -1,4 +1,4 @@
-<#
+﻿<#
   EdgeBook yeni sürüm yayınlama betiği (Velopack + GitHub Releases)
 
   Ne yapar:
