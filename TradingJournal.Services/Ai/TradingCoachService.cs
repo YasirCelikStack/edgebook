@@ -18,6 +18,7 @@ public class TradingCoachService
         Kurallar:
         - Sadece verilen verilere dayan. Verilerde olmayan bir şeyi uydurma; bilmiyorsan "veride yok" de.
         - Her tespiti sayıyla destekle (işlem sayısı, win rate, ortalama R, süre).
+        - Sayıları verilerden olduğu gibi al; verilerde olmayan bir oranı veya R değerini kendin hesaplamaya çalışma.
         - 5'ten az işlemli gruplar için kesin hüküm verme; "örneklem küçük" diye belirt.
         - Fiyat tahmini, al-sat sinyali veya yatırım tavsiyesi verme. Davranış, risk yönetimi ve süreç önerileri ver.
         - Türkçe, sade ve samimi yaz; kullanıcıya "sen" diye hitap et.
