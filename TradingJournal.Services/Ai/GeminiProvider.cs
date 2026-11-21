@@ -63,57 +63,85 @@ public class GeminiProvider : IAiProvider
     }
 
     // Modelleri sırayla dener. Dönen değer: cevap, cevap veren model ve denenen modeller.
+    // Önce ana model denenir; "yoğun" (5xx) veya zaman aşımında kısa beklemelerle aynı model 2 kez daha denenir
+    // (bu hatalar genelde birkaç saniyede geçer). Ancak model hiç yoksa ya da tamamen başarısızsa başka modele geçilir.
     private async Task<(string Text, string Model, List<string> Tried)> GenerateWithFallbackAsync(
         string systemPrompt, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
     {
         var tried = new List<string>();
+        var errors = new List<string>();     // Kullanıcıya gösterilecek: her model ne cevap verdi.
         List<string>? candidates = null;
         string? model = _workingModel ?? _model;
-        Exception? lastError = null;
-
-        bool waitedForRateLimit = false;
+        Exception? firstError = null;
+        bool allQuota = true;
 
         while (model is not null && tried.Count < MaxModelAttempts)
         {
-            if (!tried.Contains(model))
-                tried.Add(model);
-            try
+            tried.Add(model);
+            bool isMainModel = tried.Count == 1;
+            int retries = 0;
+
+            while (true)
             {
-                using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                attempt.CancelAfter(AttemptTimeout);
-                string text = await SendAsync(model, systemPrompt, messages, attempt.Token);
-                _workingModel = model;
-                return (text, model, tried);
-            }
-            catch (QuotaExceededForModelException quota) when (!quota.IsDaily)
-            {
-                // Dakikalık sınır: başka modele geçmek yerine (onların ücretsiz hakkı olmayabilir)
-                // Gemini'nin söylediği kadar bekleyip aynı modeli bir kez daha dene.
-                if (waitedForRateLimit || quota.RetryAfter > MaxRetryWait)
-                    throw new AiQuotaExceededException(daily: false, $"{model}: {quota.Detail}");
-                waitedForRateLimit = true;
-                await Task.Delay(quota.RetryAfter + TimeSpan.FromSeconds(1), ct);
-                continue;
-            }
-            catch (Exception ex) when (IsRetryableWithAnotherModel(ex, ct))
-            {
-                lastError = ex;
+                try
+                {
+                    using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    attempt.CancelAfter(AttemptTimeout);
+                    string text = await SendAsync(model, systemPrompt, messages, attempt.Token);
+                    _workingModel = model;
+                    return (text, model, tried);
+                }
+                catch (QuotaExceededForModelException quota) when (!quota.IsDaily && retries == 0 && quota.RetryAfter <= MaxRetryWait)
+                {
+                    // Dakikalık sınır: söylenen süre kadar bekleyip aynı modeli bir kez daha dene.
+                    retries++;
+                    await Task.Delay(quota.RetryAfter + TimeSpan.FromSeconds(1), ct);
+                }
+                catch (Exception ex) when (isMainModel && retries < 2 && IsTransient(ex, ct))
+                {
+                    // Ana model geçici olarak yoğun / yavaş: 3 sn, sonra 8 sn bekleyip tekrar dene.
+                    retries++;
+                    await Task.Delay(TimeSpan.FromSeconds(retries == 1 ? 3 : 8), ct);
+                }
+                catch (Exception ex) when (IsRetryableWithAnotherModel(ex, ct))
+                {
+                    firstError ??= ex;
+                    errors.Add($"{model}: {Describe(ex)}");
+                    if (ex is not QuotaExceededForModelException) allQuota = false;
+                    break;
+                }
             }
 
             candidates ??= await ListCandidateModelsAsync(ct);
             model = candidates.FirstOrDefault(c => !tried.Contains(c));
         }
 
-        string triedText = string.Join(", ", tried);
-        throw lastError switch
+        string detail = string.Join(" | ", errors);
+        if (allQuota && errors.Count > 0)
+            throw new AiQuotaExceededException(daily: true, detail);
+        throw firstError switch
         {
-            QuotaExceededForModelException q => new AiQuotaExceededException(daily: true, $"{triedText} · {q.Detail}"),
-            OperationCanceledException => new AiException($"Gemini zamanında yanıt vermedi (denenen modeller: {triedText}). Biraz sonra tekrar dene."),
-            ModelNotFoundException => new AiException($"Kullanılabilir bir Gemini modeli bulunamadı (denenen: {triedText})."),
-            ServiceUnavailableException => new AiException($"Gemini modelleri şu an yoğun (denenen: {triedText}). Birkaç dakika sonra tekrar dene."),
-            _ => new AiException("Gemini'den cevap alınamadı.")
+            OperationCanceledException => new AiException($"Gemini zamanında yanıt vermedi. Biraz sonra tekrar dene.\n({detail})"),
+            ServiceUnavailableException => new AiException($"Gemini şu an yoğun. Birkaç dakika sonra tekrar dene.\n({detail})"),
+            _ => new AiException($"Gemini'den cevap alınamadı.\n({detail})")
         };
     }
+
+    private static string Describe(Exception ex) => ex switch
+    {
+        QuotaExceededForModelException q => (q.IsDaily ? "kota yok / günlük kota doldu" : "dakikalık sınır") + $" [{q.Detail}]",
+        ServiceUnavailableException u => $"yoğun / sunucu hatası ({u.StatusCode})",
+        ModelNotFoundException => "model bulunamadı (404)",
+        OperationCanceledException => $"{AttemptTimeout.TotalSeconds:0} sn'de cevap vermedi",
+        _ => ex.Message
+    };
+
+    private static bool IsTransient(Exception ex, CancellationToken userToken) => ex switch
+    {
+        ServiceUnavailableException => true,
+        OperationCanceledException => !userToken.IsCancellationRequested,
+        _ => false
+    };
 
     // Başka bir modelle tekrar denemeye değer hatalar. Anahtar hatası gibi diğer durumlar doğrudan kullanıcıya gider.
     private static bool IsRetryableWithAnotherModel(Exception ex, CancellationToken userToken) => ex switch
@@ -170,7 +198,7 @@ public class GeminiProvider : IAiProvider
         }
 
         if (text.Length == 0)
-            throw new ServiceUnavailableException(); // Boş cevap: başka modelle dene.
+            throw new ServiceUnavailableException(200); // Boş cevap: tekrar dene.
         if (candidate?.FinishReason == "MAX_TOKENS")
             text.Append(" …");
 
@@ -200,7 +228,7 @@ public class GeminiProvider : IAiProvider
                 new AiAuthenticationException("Gemini anahtarı yetkisiz. Anahtarı AI Studio'dan kontrol et."),
             HttpStatusCode.BadRequest when apiMessage?.Contains("API key", StringComparison.OrdinalIgnoreCase) == true =>
                 new AiAuthenticationException("Gemini anahtarı geçersiz. AI Studio'dan kopyaladığın anahtarı tekrar gir."),
-            >= HttpStatusCode.InternalServerError => new ServiceUnavailableException(),
+            >= HttpStatusCode.InternalServerError => new ServiceUnavailableException((int)status),
             _ => new AiException($"Gemini hatası ({(int)status}): {apiMessage ?? "bilinmeyen hata"}")
         };
     }
@@ -277,7 +305,8 @@ public class GeminiProvider : IAiProvider
                 return new List<string>();
 
             ModelList? list = await response.Content.ReadFromJsonAsync<ModelList>(ct);
-            string[] excluded = ["image", "tts", "audio", "live", "embedding", "vision", "latest"];
+            // "omni" modellerinin ücretsiz katmanda hakkı yok (21 Kasım denemesi); "latest" takma adları zaten aynı modele gider.
+            string[] excluded = ["image", "tts", "audio", "live", "embedding", "vision", "latest", "omni"];
 
             return (list?.Models ?? [])
                 .Where(m => m.Methods?.Contains("generateContent") == true)
@@ -338,7 +367,10 @@ public class GeminiProvider : IAiProvider
 
     // --- Sadece bu sınıfın içinde kullanılan, "başka modeli dene / bekle" anlamına gelen hatalar ---
     private sealed class ModelNotFoundException : Exception;
-    private sealed class ServiceUnavailableException : Exception;
+    private sealed class ServiceUnavailableException(int statusCode) : Exception
+    {
+        public int StatusCode { get; } = statusCode;
+    }
 
     private sealed class QuotaExceededForModelException(bool isDaily, TimeSpan retryAfter, string detail) : Exception
     {
