@@ -154,20 +154,34 @@ public class ChartVaultApiImporter : IJournalImporter
         return body?.AccessToken ?? throw new ImportException("Giriş yanıtında erişim anahtarı yok.");
     }
 
+    // Supabase REST bir seferde en fazla 1000 satır döndürür; kayıtlar 1000'erlik sayfalarla okunur.
+    // Sıralamaya id de eklenir ki aynı saatte açılmış işlemler sayfalar arasında kaymasın.
+    // (Chart Vault kullanıcı başına en fazla 5000 Journal kaydı tutuyor; 10 sayfa güvenlik sınırı.)
+    private const int PageSize = 1000;
+
     private async Task<List<JournalEntryDto>> GetEntriesAsync(string token, CancellationToken ct)
     {
-        string url = $"{BaseUrl}/rest/v1/journal_entries?select=*&status=in.({TakenStatuses})&order=entry_time.asc&limit=5000";
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("apikey", _settings.PublishableKey.Trim());
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var all = new List<JournalEntryDto>();
+        for (int page = 0; page < 10; page++)
+        {
+            string url = $"{BaseUrl}/rest/v1/journal_entries?select=*&status=in.({TakenStatuses})" +
+                         $"&order=entry_time.asc,id.asc&limit={PageSize}&offset={page * PageSize}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("apikey", _settings.PublishableKey.Trim());
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        using HttpResponseMessage response = await _http.SendAsync(request, ct);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new ImportException("Chart Vault'ta journal_entries tablosu bulunamadı.");
-        if (!response.IsSuccessStatusCode)
-            throw new ImportException($"Journal kayıtları okunamadı ({(int)response.StatusCode}).");
+            using HttpResponseMessage response = await _http.SendAsync(request, ct);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                throw new ImportException("Chart Vault'ta journal_entries tablosu bulunamadı.");
+            if (!response.IsSuccessStatusCode)
+                throw new ImportException($"Journal kayıtları okunamadı ({(int)response.StatusCode}).");
 
-        return await response.Content.ReadFromJsonAsync<List<JournalEntryDto>>(ct) ?? new();
+            List<JournalEntryDto> batch = await response.Content.ReadFromJsonAsync<List<JournalEntryDto>>(ct) ?? new();
+            all.AddRange(batch);
+            if (batch.Count < PageSize)
+                break;
+        }
+        return all;
     }
 
     // Chart Vault kaydını ortak ImportedTrade yapısına çevirir. Eksik/bozuk kayıtlar atlanır (null).
