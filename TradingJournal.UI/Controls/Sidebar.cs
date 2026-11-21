@@ -67,11 +67,22 @@ public class Sidebar : Panel
         base.OnPaint(e);
         Graphics g = e.Graphics;
 
-        // Logo: mavi kare içinde "E" + uygulama adı
-        Theme.FillRounded(g, Theme.Accent, new RectangleF(22, 28, 36, 36), 10);
-        using (var logoFont = new Font(Theme.FontName, 15f, FontStyle.Bold))
+        // Logo (Assets/logo-96.png, exe'ye gömülü) + uygulama adı
+        Image? logo = TradingJournal.UI.Helpers.AppIcon.Logo;
+        if (logo is not null)
+        {
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            g.DrawImage(logo, new Rectangle(20, 26, 40, 40));
+        }
+        else
+        {
+            // Logo yüklenemezse eski çizim: mavi kare içinde "E"
+            Theme.FillRounded(g, Theme.Accent, new RectangleF(22, 28, 36, 36), 10);
+            using var logoFont = new Font(Theme.FontName, 15f, FontStyle.Bold);
             TextRenderer.DrawText(g, "E", logoFont, new Rectangle(22, 28, 36, 36), Color.White,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
         using (var nameFont = new Font(Theme.FontName, 14f, FontStyle.Bold))
             TextRenderer.DrawText(g, "EdgeBook", nameFont, new Point(68, 26), Theme.Text);
         TextRenderer.DrawText(g, "Trading Journal", Theme.Small, new Point(70, 50), Theme.TextMuted);

@@ -44,6 +44,7 @@ public class MainForm : XtraForm
         ClientSize = new Size(1440, 860);
         MinimumSize = new Size(1150, 700);
         StartPosition = FormStartPosition.CenterScreen;
+        TradingJournal.UI.Helpers.AppIcon.Apply(this);
         BackColor = Theme.Background;
         KeyPreview = true;
 

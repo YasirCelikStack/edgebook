@@ -18,6 +18,7 @@ public abstract class DialogFormBase : XtraForm
     {
         Text = title;
         StartPosition = FormStartPosition.CenterParent;
+        TradingJournal.UI.Helpers.AppIcon.Apply(this);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;

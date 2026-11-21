@@ -1,4 +1,6 @@
-# EdgeBook
+<p align="center"><img src="docs/logo-512.png" width="112" alt="EdgeBook logosu"></p>
+
+<h1 align="center">EdgeBook</h1>
 
 Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zeka destekli masaüstü trading journal uygulaması.
 

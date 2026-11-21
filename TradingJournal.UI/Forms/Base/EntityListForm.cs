@@ -24,6 +24,7 @@ public abstract class EntityListForm<T> : XtraForm where T : BaseEntity, new()
     {
         Text = title;
         StartPosition = FormStartPosition.CenterParent;
+        TradingJournal.UI.Helpers.AppIcon.Apply(this);
         ClientSize = new Size(720, 440);
         ShowInTaskbar = false;
 

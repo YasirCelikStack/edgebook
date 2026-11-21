@@ -18,7 +18,9 @@
     <Product>EdgeBook</Product>
     <Company>Yasir Celik</Company>
     <!-- Sürüm: yayın betiği (release.ps1) bunu -p:Version=... ile ezer. -->
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
+    <!-- Exe simgesi (Masaüstü, Başlat menüsü, Dosya Gezgini). -->
+    <ApplicationIcon>Assets\edgebook.ico</ApplicationIcon>
     <!-- Bilgisayarında kurulu DevExpress sürümü (Visual Studio > Extensions > DevExpress > About). -->
     <DevExpressVersion>26.1.5</DevExpressVersion>
   </PropertyGroup>
@@ -26,6 +28,12 @@
   <ItemGroup>
     <!-- WinForms projelerinde System.IO otomatik eklenmiyor (File, FileStream, MemoryStream için). -->
     <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pencere simgesi ve kenar çubuğu logosu exe'ye gömülür (Helpers/AppIcon.cs). -->
+    <EmbeddedResource Include="Assets\edgebook.ico" LogicalName="EdgeBook.Icon" />
+    <EmbeddedResource Include="Assets\logo-96.png" LogicalName="EdgeBook.Logo" />
   </ItemGroup>
 
   <ItemGroup>
