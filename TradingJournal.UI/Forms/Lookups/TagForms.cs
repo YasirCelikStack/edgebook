@@ -3,6 +3,8 @@ using DevExpress.XtraEditors;
 using DevExpress.XtraGrid.Views.Base;
 using TradingJournal.Core.Entities;
 using TradingJournal.UI.Forms.Base;
+// Form sınıfının içinde "Tag" yazınca Control.Tag özelliği anlaşılıyor; entity için takma ad kullanıyoruz.
+using TagEntity = TradingJournal.Core.Entities.Tag;
 
 namespace TradingJournal.UI.Forms.Lookups;
 
@@ -13,13 +15,13 @@ public class TagListForm : EntityListForm<Tag>
 
     protected override void ConfigureColumns()
     {
-        AddColumn(nameof(Tag.Name), "Etiket", width: 200);
-        AddColumn(nameof(Tag.ColorHex), "Renk", width: 90);
+        AddColumn(nameof(TagEntity.Name), "Etiket", width: 200);
+        AddColumn(nameof(TagEntity.ColorHex), "Renk", width: 90);
 
         // Renk sütununun hücresini etiketin kendi rengiyle boya.
         View.CustomDrawCell += (_, e) =>
         {
-            if (e.Column.FieldName != nameof(Tag.ColorHex) || e.CellValue is not string hex)
+            if (e.Column.FieldName != nameof(TagEntity.ColorHex) || e.CellValue is not string hex)
                 return;
             if (TryParseColor(hex, out Color color))
                 e.Appearance.BackColor = color;
