@@ -64,7 +64,7 @@ public class CoachPage : PageBase
         _reportCard.Controls.Add(reportBottom);
 
         // Sağ: sohbet
-        var suggestions = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 92, BackColor = Theme.Card };
+        var suggestions = new FlowLayoutPanel { Dock = DockStyle.Bottom, BackColor = Theme.Card, Padding = new Padding(0, 4, 0, 4) };
         foreach (string q in SuggestedQuestions)
         {
             var chip = new FlatButton(q) { Height = 30, Font = Theme.Small };
@@ -83,6 +83,16 @@ public class CoachPage : PageBase
         _chatCard.Controls.Add(_chatText);
         _chatCard.Controls.Add(suggestions);
         _chatCard.Controls.Add(inputRow);
+
+        // Öneri düğmeleri genişliğe göre kaç satıra sığıyorsa panel o kadar uzar (sabit yükseklik alttakileri kesiyordu).
+        void FitSuggestions()
+        {
+            int needed = suggestions.GetPreferredSize(new Size(suggestions.Width, 0)).Height;
+            if (needed > 0 && suggestions.Height != needed)
+                suggestions.Height = needed;
+        }
+        suggestions.SizeChanged += (_, _) => FitSuggestions();
+        suggestions.Layout += (_, _) => FitSuggestions();
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Theme.Background };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
