@@ -25,16 +25,17 @@ public class CoachPage : PageBase
     ];
 
     private readonly Label _keyStatus = new() { AutoSize = true, Font = Theme.Body, ForeColor = Theme.TextMuted, Margin = new Padding(4, 10, 12, 0) };
-    private readonly FlatButton _keyButton = new("Anahtar ayarla", "");
+    private readonly FlatButton _keyButton = new("Anahtar ayarla", "\uE8D7");
+    private readonly FlatButton _testButton = new("Bağlantıyı test et", "\uE9D9");
 
     private readonly CardPanel _reportCard = new("Koç raporu");
     private readonly RichTextBox _reportText = CreateTextBox();
-    private readonly FlatButton _reportButton = new("Rapor oluştur", "", primary: true);
+    private readonly FlatButton _reportButton = new("Rapor oluştur", "\uE945", primary: true);
 
     private readonly CardPanel _chatCard = new("Koça sor") { Hint = "her soru 1 istek" };
     private readonly RichTextBox _chatText = CreateTextBox();
     private readonly TextEdit _question = new();
-    private readonly FlatButton _askButton = new("Sor", "", primary: true);
+    private readonly FlatButton _askButton = new("Sor", "\uE724", primary: true);
 
     private readonly List<ChatMessage> _history = new();
     private List<Trade> _trades = new();

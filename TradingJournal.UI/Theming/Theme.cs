@@ -53,18 +53,18 @@ public static class Theme
 
     public static class Glyph
     {
-        public const string Dashboard = "";
-        public const string List = "";
-        public const string Calendar = "";
-        public const string Settings = "";
-        public const string Add = "";
-        public const string Edit = "";
-        public const string Delete = "";
-        public const string Check = "";
-        public const string Picture = "";
-        public const string Back = "";
-        public const string Forward = "";
-        public const string Save = "";
+        public const string Dashboard = "\uE80F";
+        public const string List = "\uE8FD";
+        public const string Calendar = "\uE787";
+        public const string Settings = "\uE713";
+        public const string Add = "\uE710";
+        public const string Edit = "\uE70F";
+        public const string Delete = "\uE74D";
+        public const string Check = "\uE73E";
+        public const string Picture = "\uE91B";
+        public const string Back = "\uE76B";
+        public const string Forward = "\uE76C";
+        public const string Save = "\uE74E";
     }
 
     public static GraphicsPath RoundedRect(RectangleF bounds, float radius)

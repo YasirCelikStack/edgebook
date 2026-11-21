@@ -24,8 +24,8 @@ public class ImportPage : PageBase
     private readonly TextEdit _password = new();
     private readonly LookUpEdit _account = EditorFactory.Lookup(nameof(Account.Name));
     private readonly SpinEdit _risk = EditorFactory.Decimal(decimals: 2, max: 100);
-    private readonly FlatButton _fetchButton = new("Bağlan ve getir", "", primary: true);
-    private readonly FlatButton _importButton = new("İçe aktar", "", primary: true) { Enabled = false };
+    private readonly FlatButton _fetchButton = new("Bağlan ve getir", "\uE895", primary: true);
+    private readonly FlatButton _importButton = new("İçe aktar", "\uE896", primary: true) { Enabled = false };
     private readonly Label _status = new() { AutoSize = false, Height = 60, ForeColor = Theme.TextMuted, Font = Theme.Small };
 
     private readonly GridControl _grid = new() { Dock = DockStyle.Fill };

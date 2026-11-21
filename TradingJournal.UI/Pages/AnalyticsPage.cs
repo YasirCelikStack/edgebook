@@ -50,9 +50,9 @@ public class AnalyticsPage : PageBase
             presets.Controls.Add(button);
         }
 
-        var fieldsButton = new FlatButton("Alanlar", "");
+        var fieldsButton = new FlatButton("Alanlar", "\uE71D");
         fieldsButton.Click += (_, _) => _pivot.FieldsCustomization();
-        var exportButton = new FlatButton("Excel'e aktar", "");
+        var exportButton = new FlatButton("Excel'e aktar", "\uE74E");
         exportButton.Click += (_, _) => ExportToExcel();
         var tools = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 250, BackColor = Theme.Background, FlowDirection = FlowDirection.RightToLeft };
         tools.Controls.Add(exportButton);

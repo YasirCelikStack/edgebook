@@ -32,8 +32,6 @@
     <PackageReference Include="DevExpress.Win.Design" Version="$(DevExpressVersion)" />
     <PackageReference Include="DevExpress.Win.Charts" Version="$(DevExpressVersion)" />
     <PackageReference Include="DevExpress.Win.PivotGrid" Version="$(DevExpressVersion)" />
-    <!-- Gemini anahtarını Windows DPAPI ile şifreleyip saklamak için. -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>
 
 </Project>

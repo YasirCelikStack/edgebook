@@ -17,12 +17,12 @@ public class DashboardPage : PageBase
     private readonly IStatisticsService _statistics = new StatisticsService();
     private readonly RiskService _risk = new();
 
-    private readonly StatCard _netCard = new("Net kâr", "");
-    private readonly StatCard _winRateCard = new("Win rate", "");
-    private readonly StatCard _pfCard = new("Profit factor", "");
-    private readonly StatCard _avgRCard = new("Ortalama R", "");
-    private readonly StatCard _expectancyCard = new("Beklenti", "");
-    private readonly StatCard _drawdownCard = new("Max drawdown", "");
+    private readonly StatCard _netCard = new("Net kâr", "\uE8C7");
+    private readonly StatCard _winRateCard = new("Win rate", "\uE9D2");
+    private readonly StatCard _pfCard = new("Profit factor", "\uE8EF");
+    private readonly StatCard _avgRCard = new("Ortalama R", "\uE9D9");
+    private readonly StatCard _expectancyCard = new("Beklenti", "\uE8B5");
+    private readonly StatCard _drawdownCard = new("Max drawdown", "\uE74B");
 
     private readonly ChartControl _equityChart = ChartStyler.Create();
     private readonly ChartControl _rChart = ChartStyler.Create();
