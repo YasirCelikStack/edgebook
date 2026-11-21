@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TradingJournal.Core/TradingJournal.Core.csproj" />
+  <Project Path="TradingJournal.Data/TradingJournal.Data.csproj" />
+  <Project Path="TradingJournal.Services/TradingJournal.Services.csproj" />
+  <Project Path="TradingJournal.UI/TradingJournal.UI.csproj" />
+</Solution>
