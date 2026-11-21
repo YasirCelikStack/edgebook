@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\TradingJournal.Core\TradingJournal.Core.csproj" />
@@ -12,6 +12,14 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyTitle>EdgeBook</AssemblyTitle>
+    <!-- Bilgisayarında kurulu DevExpress sürümü (Visual Studio > Extensions > DevExpress > About). -->
+    <DevExpressVersion>26.1.*</DevExpressVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- DevExpress kurulumu "DevExpress XX.X Local" NuGet kaynağını ekler; paket oradan gelir. -->
+    <PackageReference Include="DevExpress.Win.Design" Version="$(DevExpressVersion)" />
+  </ItemGroup>
 
 </Project>

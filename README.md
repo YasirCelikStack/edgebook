@@ -42,4 +42,15 @@ cd edgebook
 dotnet build
 ```
 
-*(Çalıştırma ve yapay zeka ayarları geliştikçe eklenecek.)*
+Uygulama ilk açılışta veritabanını kendisi oluşturur (`Database.Migrate()`), ayrıca komut çalıştırmaya gerek yoktur.
+
+> `TradingJournal.UI.csproj` içindeki `DevExpressVersion` değeri, bilgisayarında kurulu DevExpress sürümüyle aynı olmalıdır.
+
+## Arayüz
+
+- **Ana pencere:** Ribbon menü + `GridControl` işlem listesi (otomatik filtre satırı, arama, sütuna göre gruplama, PnL/R ara toplamları). Durum çubuğu, o an filtrelenmiş işlemlerin win rate, profit factor, ortalama R ve max drawdown değerlerini gösterir.
+- **İşlem formu:** Enstrüman türüne göre `ForexTrade` (lot) veya `CryptoTrade` (miktar + kaldıraç) oluşturur; etiket, strateji, puan ve not girilir.
+- **İşlemi kapat:** `Trade.Close()` ile çıkış fiyatı ve zamanı kaydedilir, sonuç (Net PnL, R) gösterilir.
+- **Tanımlar:** Hesap, enstrüman, strateji ve etiket ekranları tek bir generic `EntityListForm<T>` sınıfından türer.
+
+*(Yapay zeka ayarları geliştikçe eklenecek.)*

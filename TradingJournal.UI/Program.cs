@@ -1,16 +1,37 @@
+using DevExpress.LookAndFeel;
+using DevExpress.XtraEditors;
+using Microsoft.EntityFrameworkCore;
+using TradingJournal.Data;
+using TradingJournal.UI.Forms;
+using TradingJournal.UI.Helpers;
+
 namespace TradingJournal.UI;
 
 static class Program
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
     [STAThread]
     static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
-        Application.Run(new Form1());
-    }    
+        UserLookAndFeel.Default.SetSkinStyle(SkinStyle.WXI);
+
+        // Yakalanmayan hatalar uygulamayı çökertmesin, kullanıcıya anlaşılır mesaj gösterilsin.
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => ErrorHelper.Show(null, e.Exception);
+
+        // Veritabanı yoksa oluşturur, eksik migration varsa uygular.
+        try
+        {
+            using var db = DbContextFactory.Create();
+            db.Database.Migrate();
+        }
+        catch (Exception ex)
+        {
+            XtraMessageBox.Show($"Veritabanı açılamadı:\n{ex.Message}", "EdgeBook",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        Application.Run(new MainForm());
+    }
 }
