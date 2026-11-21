@@ -25,14 +25,15 @@ public class GeminiProvider : IAiProvider
     private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta";
     private const int MaxModelAttempts = 3;
     private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan TestAttemptTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan TestAttemptTimeout = TimeSpan.FromSeconds(60);
 
     private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(180) };
 
     // Yeni Flash modelleri cevaptan önce "düşünür"; bu, cevabı çok geciktirebilir.
-    // Koç yorumu için derin düşünmeye gerek yok, düşünme seviyesi "low" istenir.
-    // Model bu ayarı tanımazsa (400) bir daha gönderilmez.
-    private static bool _thinkingConfigUnsupported;
+    // Koç yorumu için derin düşünmeye gerek yok: önce "minimal", model tanımazsa "low" istenir;
+    // o da tanınmazsa (400) ayar hiç gönderilmez.
+    private static readonly string?[] ThinkingLevels = ["minimal", "low", null];
+    private static int _thinkingLevelIndex;
 
     // Son başarılı model: önce bu denenir. Diske de yazılır ki uygulama yeniden açılınca
     // yoğun modelleri tek tek deneyip dakikalarca beklenmesin.
@@ -181,9 +182,9 @@ public class GeminiProvider : IAiProvider
                 role = m.FromUser ? "user" : "model",
                 parts = new[] { new { text = m.Text } }
             }).ToArray(),
-            generationConfig = _thinkingConfigUnsupported
-                ? (object)new { temperature = 0.4 }
-                : new { temperature = 0.4, thinkingConfig = new { thinkingLevel = "low" } }
+            generationConfig = ThinkingLevels[_thinkingLevelIndex] is string level
+                ? (object)new { temperature = 0.4, thinkingConfig = new { thinkingLevel = level } }
+                : new { temperature = 0.4 }
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/models/{model}:generateContent")
@@ -195,10 +196,10 @@ public class GeminiProvider : IAiProvider
         using HttpResponseMessage response = await SharedHttp.SendAsync(request, ct);
         string json = await response.Content.ReadAsStringAsync(ct);
 
-        if (response.StatusCode == HttpStatusCode.BadRequest && !_thinkingConfigUnsupported
+        if (response.StatusCode == HttpStatusCode.BadRequest && ThinkingLevels[_thinkingLevelIndex] is not null
             && json.Contains("thinking", StringComparison.OrdinalIgnoreCase))
         {
-            _thinkingConfigUnsupported = true;
+            _thinkingLevelIndex++;
             return await SendAsync(model, systemPrompt, messages, ct);
         }
 
