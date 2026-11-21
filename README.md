@@ -4,9 +4,13 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 
 > Fırat Üniversitesi Nesne Tabanlı Programlama dersi dönem projesi olarak geliştirilmiştir. Ticari bir ürün değildir.
 
+### ⬇️ [EdgeBook'u indir (Windows, kurulum dosyası)](https://github.com/YasirCelikStack/edgebook/releases/latest/download/EdgeBookApp-win-Setup.exe)
+
+İndirdiğiniz `EdgeBookApp-win-Setup.exe` dosyasını çalıştırmanız yeterli. Uygulama kendini otomatik günceller. Ayrıntılar aşağıdaki [İndir](#i̇ndir) bölümünde.
+
 ## İndir
 
-En son sürüm: **[Releases](https://github.com/YasirCelikStack/edgebook/releases/latest)** sayfasındaki `EdgeBookApp-win-Setup.exe` dosyasını indirip çalıştırın. .NET kurmanıza gerek yoktur.
+**[Kurulum dosyasını indir](https://github.com/YasirCelikStack/edgebook/releases/latest/download/EdgeBookApp-win-Setup.exe)** (her zaman en son sürüm) ya da **[Releases](https://github.com/YasirCelikStack/edgebook/releases/latest)** sayfasından `EdgeBookApp-win-Setup.exe` dosyasını indirip çalıştırın. .NET kurmanıza gerek yoktur.
 
 - Kurulumdan sonra EdgeBook, Başlat menüsünden açılır.
 - **Güncellemeler otomatiktir:** Yeni sürüm yayınlanınca uygulama açılışta üstte bir şerit gösterir; "Şimdi güncelle"ye basınca yeni sürüm indirilir ve uygulama yeniden başlar. Sol alttaki sürüm yazısına tıklayarak da güncellemeleri denetleyebilirsiniz.
