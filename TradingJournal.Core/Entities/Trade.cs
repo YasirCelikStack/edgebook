@@ -32,6 +32,10 @@ public abstract class Trade : BaseEntity
     public DateTime? CloseTime { get; set; }
     public string? Notes { get; set; }
 
+    // Başka bir sistemden içe aktarıldıysa oradaki kimliği (örn. "chartvault:3f2a...").
+    // Aynı işlemin ikinci kez aktarılmasını engellemek için kullanılır.
+    public string? ExternalId { get; set; }
+
     public decimal EntryPrice
     {
         get => _entryPrice;

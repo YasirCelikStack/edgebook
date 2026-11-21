@@ -55,4 +55,14 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **Takvim:** Günlük net sonuç takvimi ve haftalık toplamlar. Bir güne tıklayınca o günün işlemleri listelenir.
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
 
+## Chart Vault entegrasyonu
+
+**Chart Vault** sayfası, Chart Vault web uygulamasının Journal kayıtlarını Supabase REST API'si üzerinden okur ve EdgeBook'a aktarır (`TradingJournal.Services/Import`).
+
+- `IJournalImporter` arayüzü → `ChartVaultApiImporter` (e-posta/şifre ile `/auth/v1/token`, ardından `/rest/v1/journal_entries`). Sadece okuma yapılır.
+- Sadece girilmiş işlemler aktarılır (`open`, `tp`, `sl`, `be`, `manual`); bekleyen ve gerçekleşmeyen planlar atlanır.
+- Chart Vault işlemleri R cinsindendir. Lot/miktar, seçilen hesabın bakiyesi ve "işlem başı risk %" değerinden hesaplanır.
+- Her işlem `ExternalId` (`chartvault:<uuid>`) ile işaretlenir; tekrar aktarımda aynı işlem eklenmez.
+- Supabase adresi ve publishable key `%LocalAppData%\EdgeBook\chartvault.json` dosyasında tutulur, şifre kaydedilmez.
+
 *(Yapay zeka ayarları geliştikçe eklenecek.)*

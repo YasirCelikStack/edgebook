@@ -1,0 +1,196 @@
+using Microsoft.EntityFrameworkCore;
+using TradingJournal.Core.Entities;
+using TradingJournal.Core.Enums;
+using TradingJournal.Core.Exceptions;
+using TradingJournal.Data;
+
+namespace TradingJournal.Services.Import;
+
+// Önizleme satırı: içe aktarılacak işlem + EdgeBook'ta zaten var mı.
+public record ImportPreviewItem(ImportedTrade Trade, bool AlreadyImported);
+
+public record ImportResult(int Added, int Skipped, int Failed, List<string> Errors);
+
+// Dış kaynaktan gelen işlemleri EdgeBook işlemlerine çevirip kaydeder.
+//
+// Lot büyüklüğü: Chart Vault işlemleri sadece R cinsinden tutar (para / lot yok).
+// Bu yüzden kullanıcı "işlem başı risk %" verir; lot, stop mesafesinden hesaplanır:
+//   risk tutarı = başlangıç bakiyesi × risk %
+//   Forex:  lot    = risk tutarı / (stop pip × 1 lotta pip değeri)
+//   Kripto: miktar = risk tutarı / |giriş − stop|
+// Böylece -1R'lik işlem yaklaşık risk tutarı kadar zarar olarak görünür.
+public class JournalImportService
+{
+    public async Task<List<ImportPreviewItem>> PreviewAsync(IEnumerable<ImportedTrade> trades)
+    {
+        using var db = DbContextFactory.Create();
+        HashSet<string> existing = await LoadExistingIdsAsync(db);
+        return trades.Select(t => new ImportPreviewItem(t, existing.Contains(t.ExternalId))).ToList();
+    }
+
+    public async Task<ImportResult> ImportAsync(IJournalImporter source, IEnumerable<ImportedTrade> trades,
+        int accountId, decimal riskPercent)
+    {
+        if (riskPercent <= 0 || riskPercent > 100)
+            throw new DomainException("İşlem başı risk 0 ile 100 arasında olmalıdır.");
+
+        using var db = DbContextFactory.Create();
+        Account account = await db.Accounts.FindAsync(accountId)
+                          ?? throw new DomainException("Hesap bulunamadı.");
+        decimal riskAmount = account.InitialBalance * riskPercent / 100m;
+
+        HashSet<string> existing = await LoadExistingIdsAsync(db);
+        Dictionary<string, Instrument> instruments = await db.Instruments.ToDictionaryAsync(i => i.Symbol);
+        Dictionary<string, Strategy> strategies = await db.Strategies.ToDictionaryAsync(s => s.Name, StringComparer.OrdinalIgnoreCase);
+
+        int added = 0, skipped = 0, failed = 0;
+        var errors = new List<string>();
+
+        foreach (ImportedTrade item in trades)
+        {
+            if (existing.Contains(item.ExternalId))
+            {
+                skipped++;
+                continue;
+            }
+
+            try
+            {
+                Instrument instrument = GetOrCreateInstrument(db, instruments, item.Symbol);
+                Strategy? strategy = item.Setup is null ? null : GetOrCreateStrategy(db, strategies, item.Setup);
+
+                Trade trade = CreateTrade(item, instrument, riskAmount);
+                trade.Account = account;
+                trade.Instrument = instrument;
+                trade.Strategy = strategy;
+
+                db.Trades.Add(trade);
+                existing.Add(item.ExternalId);
+                added++;
+            }
+            catch (DomainException ex)
+            {
+                failed++;
+                errors.Add($"{item.Symbol} {item.OpenTime:dd.MM.yyyy HH:mm}: {ex.Message}");
+            }
+        }
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            throw new DataAccessException("İçe aktarılan işlemler kaydedilemedi.", ex);
+        }
+
+        return new ImportResult(added, skipped, failed, errors);
+    }
+
+    private static async Task<HashSet<string>> LoadExistingIdsAsync(TradingJournalDbContext db)
+        => (await db.Trades.Where(t => t.ExternalId != null).Select(t => t.ExternalId!).ToListAsync()).ToHashSet();
+
+    private static Trade CreateTrade(ImportedTrade item, Instrument instrument, decimal riskAmount)
+    {
+        decimal stopDistance = Math.Abs(item.EntryPrice - item.StopLoss);
+        if (stopDistance == 0)
+            throw new DomainException("Stop mesafesi sıfır.");
+
+        Trade trade;
+        if (instrument.Type == InstrumentType.Crypto)
+        {
+            trade = new CryptoTrade
+            {
+                Quantity = Math.Max(0.000001m, Math.Round(riskAmount / stopDistance, 6)),
+                Leverage = 1
+            };
+        }
+        else
+        {
+            decimal stopPips = stopDistance / instrument.PipSize;
+            decimal lot = riskAmount / (stopPips * instrument.PipValuePerLot);
+            trade = new ForexTrade
+            {
+                PipSize = instrument.PipSize,
+                PipValuePerLot = instrument.PipValuePerLot,
+                LotSize = Math.Max(0.01m, Math.Round(lot, 2))
+            };
+        }
+
+        trade.ExternalId = item.ExternalId;
+        trade.Direction = item.Direction;
+        trade.OpenTime = item.OpenTime;
+        trade.EntryPrice = item.EntryPrice;
+        trade.StopLoss = item.StopLoss;
+        trade.TakeProfit = item.TakeProfit;
+        trade.Notes = BuildNote(item);
+
+        if (item.IsClosed)
+        {
+            decimal exit = item.ExitPrice ?? ExitFromR(item, stopDistance);
+            DateTime closeTime = item.CloseTime is DateTime c && c >= item.OpenTime ? c : item.OpenTime;
+            trade.Close(exit, closeTime);
+        }
+
+        return trade;
+    }
+
+    // Çıkış fiyatı yoksa (elle kapatılmış) R sonucundan geri hesapla: giriş ± R × stop mesafesi.
+    private static decimal ExitFromR(ImportedTrade item, decimal stopDistance)
+    {
+        if (item.ResultR is not decimal r)
+            throw new DomainException("Kapanmış işlemde çıkış fiyatı ve R sonucu yok.");
+        int sign = item.Direction == TradeDirection.Long ? 1 : -1;
+        return item.EntryPrice + sign * r * stopDistance;
+    }
+
+    private static string BuildNote(ImportedTrade item)
+    {
+        string header = $"[Chart Vault{(item.Timeframe is null ? "" : " · " + item.Timeframe)} · {item.SourceStatus}]";
+        string note = string.IsNullOrWhiteSpace(item.Note) ? header : $"{header} {item.Note.Trim()}";
+        return note.Length > 4000 ? note[..4000] : note;
+    }
+
+    private static Instrument GetOrCreateInstrument(TradingJournalDbContext db, Dictionary<string, Instrument> cache, string symbol)
+    {
+        if (cache.TryGetValue(symbol, out Instrument? found))
+            return found;
+
+        var instrument = new Instrument { Symbol = symbol };
+        if (IsCrypto(symbol))
+        {
+            instrument.Type = InstrumentType.Crypto;
+            instrument.PipSize = 0.01m;
+            instrument.PipValuePerLot = 1m;
+        }
+        else
+        {
+            // Forex için yaygın değerler; farklıysa Tanımlar > Enstrümanlar'dan düzeltilebilir.
+            instrument.Type = InstrumentType.Forex;
+            instrument.PipSize = symbol.Contains("JPY") ? 0.01m
+                : symbol.StartsWith("XAU") ? 0.1m
+                : symbol.StartsWith("XAG") ? 0.01m
+                : 0.0001m;
+            instrument.PipValuePerLot = 10m;
+        }
+
+        db.Instruments.Add(instrument);
+        cache[symbol] = instrument;
+        return instrument;
+    }
+
+    private static bool IsCrypto(string symbol)
+        => symbol.EndsWith("USDT") || symbol.EndsWith("USDC") || symbol.EndsWith("BUSD")
+           || symbol.StartsWith("BTC") || symbol.StartsWith("ETH");
+
+    private static Strategy GetOrCreateStrategy(TradingJournalDbContext db, Dictionary<string, Strategy> cache, string name)
+    {
+        if (cache.TryGetValue(name, out Strategy? found))
+            return found;
+
+        var strategy = new Strategy { Name = name.Length > 100 ? name[..100] : name };
+        db.Strategies.Add(strategy);
+        cache[name] = strategy;
+        return strategy;
+    }
+}

@@ -275,6 +275,10 @@ namespace TradingJournal.Data.Migrations
                     b.Property<decimal?>("ExitPrice")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("InstrumentId")
                         .HasColumnType("INTEGER");
 
@@ -305,6 +309,9 @@ namespace TradingJournal.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique();
 
                     b.HasIndex("InstrumentId");
 

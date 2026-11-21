@@ -16,6 +16,7 @@ public class TradeConfiguration : IEntityTypeConfiguration<Trade>
             .HasValue<CryptoTrade>("Crypto");
 
         builder.Property(t => t.Notes).HasMaxLength(4000);
+        builder.Property(t => t.ExternalId).HasMaxLength(64);
 
         // Hesap silinirse o hesabın işlemleri de silinir.
         builder.HasOne(t => t.Account)
@@ -41,5 +42,8 @@ public class TradeConfiguration : IEntityTypeConfiguration<Trade>
             .UsingEntity(j => j.ToTable("TradeTags"));
 
         builder.HasIndex(t => t.OpenTime);
+
+        // SQLite'ta NULL değerler benzersizlik kuralına takılmaz: elle girilen işlemler sorunsuz.
+        builder.HasIndex(t => t.ExternalId).IsUnique();
     }
 }
