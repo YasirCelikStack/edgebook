@@ -4,6 +4,16 @@ Trader'ların işlemlerini kaydedip performanslarını analiz ettiği, yapay zek
 
 > Fırat Üniversitesi Nesne Tabanlı Programlama dersi dönem projesi olarak geliştirilmiştir. Ticari bir ürün değildir.
 
+## İndir
+
+En son sürüm: **[Releases](https://github.com/YasirCelikStack/edgebook/releases/latest)** sayfasındaki `EdgeBookApp-win-Setup.exe` dosyasını indirip çalıştırın. .NET kurmanıza gerek yoktur.
+
+- Kurulumdan sonra EdgeBook, Başlat menüsünden açılır.
+- **Güncellemeler otomatiktir:** Yeni sürüm yayınlanınca uygulama açılışta üstte bir şerit gösterir; "Şimdi güncelle"ye basınca yeni sürüm indirilir ve uygulama yeniden başlar. Sol alttaki sürüm yazısına tıklayarak da güncellemeleri denetleyebilirsiniz.
+- Verileriniz (`%LocalAppData%\EdgeBook`) güncellemelerden ve kaldırmadan etkilenmez.
+- İmzasız bir uygulama olduğu için Windows ilk açılışta "Windows bilgisayarınızı korudu" uyarısı gösterebilir: **Ek bilgi → Yine de çalıştır**.
+- Yapay zeka koçu için ücretsiz bir Gemini anahtarı gerekir; uygulama içindeki **Yapay zeka koçu → Anahtar ayarla** penceresi adım adım anlatır.
+
 ## Teknolojiler
 
 - C# / .NET 10, Windows Forms
@@ -67,6 +77,18 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **Yapay zeka koçu:** Gemini ile koç raporu ve işlemler hakkında soru-cevap (ayrıntılar aşağıda).
 - **Chart Vault:** Chart Vault web uygulamasındaki Journal işlemlerini içe aktarma (ayrıntılar aşağıda).
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
+
+## Yeni sürüm yayınlama (geliştirici)
+
+Kurulum dosyası ve otomatik güncellemeler [Velopack](https://velopack.io) ile üretilir ve GitHub Releases'a yüklenir.
+
+1. Bir kez: `dotnet tool install -g vpk`, GitHub'da `edgebook` reposu için **Contents: Read and write** izinli bir fine-grained token oluşturun.
+2. Her sürümde (PowerShell, repo klasöründe):
+   ```powershell
+   $env:GITHUB_TOKEN = "github_pat_..."   # dosyaya yazmayın
+   .\release.ps1 -Version 1.0.1
+   ```
+Betik; `appsettings.Local.json`'da Gemini yedek anahtarı doluysa durur (kurulum paketine girmesin), uygulamayı self-contained derler, `vpk pack` ile kurulum ve güncelleme paketlerini üretir ve `vpk upload github` ile yayınlar. Paket kimliği `EdgeBookApp`tir; uygulama `%LocalAppData%\EdgeBookApp` altına kurulur, veriler ayrı klasörde (`%LocalAppData%\EdgeBook`) kalır.
 
 ## Örnek veri
 

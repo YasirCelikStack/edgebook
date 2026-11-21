@@ -7,6 +7,7 @@ using TradingJournal.UI.Forms.Trades;
 using TradingJournal.UI.Helpers;
 using TradingJournal.UI.Pages;
 using TradingJournal.UI.Theming;
+using Velopack;
 
 namespace TradingJournal.UI.Forms;
 
@@ -23,6 +24,13 @@ public class MainForm : XtraForm
     private readonly Label _subtitle = new() { AutoSize = true, Font = Theme.Body, ForeColor = Theme.TextMuted, Location = new Point(24, 50) };
     private readonly ImageComboBoxEdit _accountPicker = new() { Width = 230 };
     private readonly FlatButton _newTradeButton = new("Yeni işlem", Theme.Glyph.Add, primary: true);
+
+    // Yeni sürüm çıkınca en üstte görünen şerit.
+    private readonly Panel _updateBanner = new() { Dock = DockStyle.Top, Height = 48, BackColor = Theme.Tint(Theme.Accent, 0.35, Theme.Background), Visible = false };
+    private readonly Label _updateLabel = new() { AutoSize = true, ForeColor = Theme.Text, Font = Theme.BodyBold, Margin = new Padding(16, 14, 16, 0) };
+    private readonly FlatButton _updateButton = new("Şimdi güncelle", "\uE896", primary: true);
+    private readonly FlatButton _laterButton = new("Sonra");
+    private UpdateInfo? _pendingUpdate;
 
     private readonly Dictionary<string, PageBase> _pages;
     private PageBase? _currentPage;
@@ -69,11 +77,15 @@ public class MainForm : XtraForm
         _sidebar.ItemSelected += async (_, key) => await NavigateAsync(key);
 
         BuildTopBar();
+        BuildUpdateBanner();
+        _sidebar.VersionText = $"v{AppUpdater.CurrentVersion}";
+        _sidebar.VersionClicked += async (_, _) => await CheckForUpdatesAsync(userRequested: true);
 
         // Sıra: önce Fill olan içerik, sonra üst çubuk, en son sol menü.
         var right = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
         right.Controls.Add(_content);
         right.Controls.Add(_topBar);
+        right.Controls.Add(_updateBanner);
         Controls.Add(right);
         Controls.Add(_sidebar);
 
@@ -89,6 +101,9 @@ public class MainForm : XtraForm
         base.OnLoad(e);
         await LoadAccountsAsync();
         _sidebar.Select("dashboard");
+
+        // Açılışta sessizce yeni sürüm var mı bak; varsa üstte şerit çıkar.
+        _ = CheckForUpdatesAsync(userRequested: false);
     }
 
     private void BuildTopBar()
@@ -105,6 +120,66 @@ public class MainForm : XtraForm
         _topBar.Controls.AddRange([_title, _subtitle, _accountPicker, _newTradeButton]);
         _topBar.Resize += (_, _) => PositionTopBarControls();
         PositionTopBarControls();
+    }
+
+    // ---------------- Güncelleme ----------------
+
+    private void BuildUpdateBanner()
+    {
+        _updateButton.Click += async (_, _) => await InstallUpdateAsync();
+        _laterButton.Click += (_, _) => _updateBanner.Visible = false;
+
+        var row = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = Color.Transparent, Padding = new Padding(4, 4, 0, 0) };
+        row.Controls.Add(_updateLabel);
+        row.Controls.Add(_updateButton);
+        row.Controls.Add(_laterButton);
+        _updateBanner.Controls.Add(row);
+    }
+
+    private async Task CheckForUpdatesAsync(bool userRequested)
+    {
+        if (!AppUpdater.IsInstalled)
+        {
+            if (userRequested)
+                XtraMessageBox.Show(this,
+                    $"Bu bir geliştirme sürümü (v{AppUpdater.CurrentVersion}). Güncellemeler sadece kurulum dosyasıyla kurulan sürümde denetlenir.",
+                    "Güncellemeler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        UpdateInfo? update = await AppUpdater.CheckAsync();
+        if (update is null)
+        {
+            if (userRequested)
+                XtraMessageBox.Show(this, $"EdgeBook güncel (v{AppUpdater.CurrentVersion}).", "Güncellemeler",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _pendingUpdate = update;
+        _updateLabel.Text = $"EdgeBook {update.TargetFullRelease.Version} yayında (sende v{AppUpdater.CurrentVersion}).";
+        _updateButton.Enabled = true;
+        _updateBanner.Visible = true;
+    }
+
+    private async Task InstallUpdateAsync()
+    {
+        if (_pendingUpdate is null) return;
+        _updateButton.Enabled = false;
+        _laterButton.Enabled = false;
+        try
+        {
+            await AppUpdater.DownloadAndRestartAsync(_pendingUpdate,
+                percent => BeginInvoke(new Action(() => _updateLabel.Text = $"Yeni sürüm indiriliyor... %{percent}")));
+            // Buraya gelinmez: uygulama yeni sürümle yeniden başlar.
+        }
+        catch (Exception ex)
+        {
+            _updateLabel.Text = "Güncelleme indirilemedi. Daha sonra tekrar dene.";
+            _updateButton.Enabled = true;
+            _laterButton.Enabled = true;
+            ErrorHelper.Show(this, ex);
+        }
     }
 
     private void OnAccountPicked()

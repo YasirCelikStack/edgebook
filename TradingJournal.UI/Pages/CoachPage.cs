@@ -133,6 +133,16 @@ public class CoachPage : PageBase
 
     private void ShowSavedReport()
     {
+        // Anahtar yoksa önce nasıl alınacağını anlat; rapor düğmesi anahtar penceresini açsın.
+        if (AiKeyStore.ResolveKey() is null)
+        {
+            _reportCard.Hint = null;
+            SetReportText("BAŞLAMADAN ÖNCE\n" + Forms.AiKeyForm.HowToText, Theme.Text);
+            _reportButton.Text = "Anahtar ekle";
+            _reportCard.Invalidate();
+            return;
+        }
+
         CoachReport? report = CoachReportStore.Load(ScopeKey);
         if (report is null)
         {
@@ -163,6 +173,11 @@ public class CoachPage : PageBase
     private async Task CreateReportAsync()
     {
         if (_busy) return;
+        if (AiKeyStore.ResolveKey() is null)
+        {
+            await EditKeyAsync();
+            return;
+        }
         await RunBusyAsync(async () =>
         {
             SetReportText("Koç işlemlerini inceliyor... (genelde 15-45 saniye sürer)", Theme.TextMuted);
@@ -254,7 +269,12 @@ public class CoachPage : PageBase
     {
         using var form = new AiKeyForm();
         if (form.ShowDialog(FindForm()) == DialogResult.OK)
+        {
             UpdateKeyStatus();
+            ShowSavedReport();
+            if (AiKeyStore.ResolveKey() is not null)
+                AppendChat(false, "Anahtar kaydedildi. \"Rapor oluştur\"a basabilir ya da bir soru sorabilirsin.");
+        }
         await Task.CompletedTask;
     }
 

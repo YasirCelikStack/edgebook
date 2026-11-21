@@ -13,6 +13,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyTitle>EdgeBook</AssemblyTitle>
+    <!-- Exe adı: EdgeBook.exe (kurulum paketi ve kısayollar bu adı kullanır). -->
+    <AssemblyName>EdgeBook</AssemblyName>
+    <Product>EdgeBook</Product>
+    <Company>Yasir Celik</Company>
+    <!-- Sürüm: yayın betiği (release.ps1) bunu -p:Version=... ile ezer. -->
+    <Version>1.0.0</Version>
     <!-- Bilgisayarında kurulu DevExpress sürümü (Visual Studio > Extensions > DevExpress > About). -->
     <DevExpressVersion>26.1.5</DevExpressVersion>
   </PropertyGroup>
@@ -32,6 +38,8 @@
     <PackageReference Include="DevExpress.Win.Design" Version="$(DevExpressVersion)" />
     <PackageReference Include="DevExpress.Win.Charts" Version="$(DevExpressVersion)" />
     <PackageReference Include="DevExpress.Win.PivotGrid" Version="$(DevExpressVersion)" />
+    <!-- Kurulum dosyası ve GitHub Releases'tan otomatik güncelleme. -->
+    <PackageReference Include="Velopack" Version="*" />
   </ItemGroup>
 
 </Project>

@@ -12,6 +12,28 @@ public class Sidebar : Panel
 
     public event EventHandler<string>? ItemSelected;
 
+    // Alttaki sürüm yazısına tıklanınca (güncellemeleri denetlemek için).
+    public event EventHandler? VersionClicked;
+
+    // Sol altta gösterilen sürüm, örn. "v1.0.0".
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public string VersionText { get; set; } = string.Empty;
+
+    private Rectangle VersionArea => new(0, Height - 56, Width, 56);
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        Cursor = VersionArea.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+    }
+
+    protected override void OnMouseClick(MouseEventArgs e)
+    {
+        base.OnMouseClick(e);
+        if (VersionArea.Contains(e.Location))
+            VersionClicked?.Invoke(this, EventArgs.Empty);
+    }
+
     public Sidebar()
     {
         Dock = DockStyle.Left;
@@ -58,8 +80,10 @@ public class Sidebar : Panel
         using var pen = new Pen(Theme.Border);
         g.DrawLine(pen, Width - 1, 0, Width - 1, Height);
 
-        TextRenderer.DrawText(g, "Fırat Üniversitesi · OOP", Theme.Small,
-            new Rectangle(0, Height - 36, Width, 20), Theme.TextFaint, TextFormatFlags.HorizontalCenter);
+        TextRenderer.DrawText(g, $"EdgeBook {VersionText}", Theme.Small,
+            new Rectangle(0, Height - 50, Width, 18), Theme.TextMuted, TextFormatFlags.HorizontalCenter);
+        TextRenderer.DrawText(g, "Güncellemeleri denetle", Theme.Small,
+            new Rectangle(0, Height - 32, Width, 18), Theme.TextFaint, TextFormatFlags.HorizontalCenter);
     }
 
     [DesignerCategory("Code")]
