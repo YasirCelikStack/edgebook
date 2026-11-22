@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using DevExpress.XtraEditors;
 using DevExpress.XtraTab;
+using TradingJournal.Services.DataBackup;
 using TradingJournal.Services.Demo;
 using TradingJournal.UI.Controls;
 using TradingJournal.UI.Forms.Lookups;
@@ -18,6 +19,9 @@ public class DefinitionsPage : PageBase
     private readonly XtraTabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly FlatButton _demoCreate = new("Örnek veri oluştur", "\uE768");
     private readonly FlatButton _demoDelete = new("Örnek verileri sil", "\uE74D") { Danger = true };
+    private readonly BackupService _backup = new();
+    private readonly FlatButton _backupCreate = new("Yedek al", "\uE74E");
+    private readonly FlatButton _backupRestore = new("Yedekten yükle", "\uE777");
 
     public DefinitionsPage(AppState state) : base(state)
     {
@@ -38,8 +42,20 @@ public class DefinitionsPage : PageBase
             AutoSize = true, ForeColor = Theme.TextMuted, Font = Theme.Small, Margin = new Padding(8, 12, 0, 0)
         });
 
+        // Yedekleme düğmeleri sağa yaslı.
+        _backupCreate.Click += async (_, _) => await CreateBackupAsync();
+        _backupRestore.Click += async (_, _) => await RestoreBackupAsync();
+        var backupBar = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, BackColor = Theme.Background, WrapContents = false };
+        backupBar.Controls.Add(_backupCreate);
+        backupBar.Controls.Add(_backupRestore);
+
+        var topBar = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = Theme.Background };
+        demoBar.Dock = DockStyle.Fill;
+        topBar.Controls.Add(demoBar);
+        topBar.Controls.Add(backupBar);
+
         Controls.Add(tabs);
-        Controls.Add(demoBar);
+        Controls.Add(topBar);
     }
 
     public override string Title => "Tanımlar";
@@ -99,6 +115,80 @@ public class DefinitionsPage : PageBase
         }
         await RefreshAsync();
         ReloadTabs();
+    }
+
+    // ---------------- Yedekleme ----------------
+
+    private async Task CreateBackupAsync()
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Title = "EdgeBook yedeğini kaydet",
+            Filter = "EdgeBook yedeği (*.zip)|*.zip",
+            FileName = $"EdgeBook-yedek-{DateTime.Now:yyyy-MM-dd}.zip"
+        };
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        _backupCreate.Enabled = false;
+        UseWaitCursor = true;
+        try
+        {
+            BackupInfo info = await Task.Run(() => _backup.CreateAsync(dialog.FileName, AppUpdater.CurrentVersion));
+            XtraMessageBox.Show(FindForm(),
+                $"Yedek kaydedildi: {info.Trades} işlem, {info.Screenshots} ekran görüntüsü.\n\n{dialog.FileName}\n\n" +
+                "Bu dosyayı bilgisayar dışında bir yerde (USB, Google Drive...) saklarsan bilgisayar değişse de verin kaybolmaz.",
+                "Yedek al", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            ErrorHelper.Show(FindForm(), ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+            _backupCreate.Enabled = true;
+        }
+    }
+
+    private async Task RestoreBackupAsync()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Geri yüklenecek EdgeBook yedeğini seç",
+            Filter = "EdgeBook yedeği (*.zip)|*.zip"
+        };
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        try
+        {
+            BackupInfo info = _backup.ReadInfo(dialog.FileName);
+            bool ok = ErrorHelper.Confirm(FindForm()!,
+                $"Yedek: {info.CreatedAt:dd.MM.yyyy HH:mm} (EdgeBook v{info.AppVersion})\n" +
+                $"İçinde {info.Trades} işlem ve {info.Screenshots} ekran görüntüsü var.\n\n" +
+                "Şu anki tüm verilerin (hesaplar, işlemler, görseller) bu yedektekilerle DEĞİŞTİRİLECEK. " +
+                "Güvenlik için mevcut verin önce otomatik olarak yedeklenir.\n\n" +
+                "İşlem bitince EdgeBook yeniden başlar. Devam edilsin mi?");
+            if (!ok) return;
+
+            _backupRestore.Enabled = false;
+            UseWaitCursor = true;
+            string safetyCopy = await Task.Run(() => _backup.RestoreAsync(dialog.FileName, AppUpdater.CurrentVersion));
+            UseWaitCursor = false;
+
+            XtraMessageBox.Show(FindForm(),
+                $"Yedek geri yüklendi. EdgeBook şimdi yeniden başlayacak.\n\nÖnceki verinin kopyası:\n{safetyCopy}",
+                "Yedekten yükle", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Application.Restart();
+        }
+        catch (Exception ex)
+        {
+            ErrorHelper.Show(FindForm(), ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+            _backupRestore.Enabled = true;
+        }
     }
 
     // Sekmelerdeki listeler (hesaplar, stratejiler...) yeni verileri göstersin diye yeniden açılır.
