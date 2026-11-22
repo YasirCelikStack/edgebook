@@ -59,7 +59,10 @@ public abstract class EntityListForm<T> : XtraForm where T : BaseEntity, new()
 
     // Listeyi yükler. İlişkili verisi de gereken tablolar (hesap + kuralları gibi) bunu ezer.
     protected virtual Task<List<T>> LoadItemsAsync(TradingJournalDbContext db)
-        => new Repository<T>(db).GetAllAsync();
+        => CreateRepository(db).GetAllAsync();
+
+    // Alt sınıf özel bir repository kullanabilir (ör. stratejiler kurallarıyla birlikte kaydedilir).
+    protected virtual Repository<T> CreateRepository(TradingJournalDbContext db) => new(db);
 
     // --- Ortak davranış ---
 
@@ -139,7 +142,7 @@ public abstract class EntityListForm<T> : XtraForm where T : BaseEntity, new()
         try
         {
             using var db = DbContextFactory.Create();
-            await action(new Repository<T>(db));
+            await action(CreateRepository(db));
         }
         catch (Exception ex)
         {

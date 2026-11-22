@@ -36,6 +36,14 @@ public class DemoDataGenerator
     private static readonly string[] StrategyNames =
         ["London Sweep + FVG", "NY Breaker Block", "Asya Range Kırılımı", "Trend Devamı"];
 
+    // Örnek stratejilerin kontrol listesi. Hangi kuralın çiğneneceği işlemin gizli davranışından gelir:
+    // FOMO → bias, killzone dışı → killzone, revenge → risk, haber günü → haber kuralı.
+    private const string RuleBias = "HTF bias ile aynı yönde";
+    private const string RuleKillzone = "Killzone içinde giriş";
+    private const string RuleRisk = "Risk hesabın %1'ini geçmiyor";
+    private const string RuleNews = "Önemli habere 30 dk'dan fazla var";
+    private static readonly string[] ChecklistRules = [RuleBias, RuleKillzone, RuleRisk, RuleNews];
+
     private static readonly string[] WinNotes =
     [
         "Plana uydum, sweep sonrası FVG'den giriş. Sabırla bekledim.",
@@ -183,6 +191,23 @@ public class DemoDataGenerator
 
             trade.Notes = PickNote(random, resultR, earlyExit, isFomo, isRevenge);
 
+            // Kontrol listesi: işlemlerin ~%85'inde doldurulmuş.
+            if (random.NextDouble() < 0.85)
+            {
+                foreach (StrategyRule rule in trade.Strategy.Rules)
+                {
+                    bool broken = rule.Text switch
+                    {
+                        RuleBias => isFomo,
+                        RuleKillzone => killzone == Killzone.None,
+                        RuleRisk => isRevenge,
+                        RuleNews => isNews,
+                        _ => false
+                    };
+                    trade.RuleChecks.Add(new TradeRuleCheck { Rule = rule, IsMet = !broken });
+                }
+            }
+
             // Son birkaç işlem açık kalsın.
             bool keepOpen = i >= times.Count - 3;
             if (!keepOpen)
@@ -328,12 +353,19 @@ public class DemoDataGenerator
 
     private static async Task<Dictionary<string, Strategy>> GetStrategiesAsync(TradingJournalDbContext db)
     {
-        Dictionary<string, Strategy> existing = await db.Strategies.ToDictionaryAsync(s => s.Name);
+        Dictionary<string, Strategy> existing = await db.Strategies.Include(s => s.Rules).ToDictionaryAsync(s => s.Name);
         foreach (string name in StrategyNames.Where(n => !existing.ContainsKey(n)))
         {
             var strategy = new Strategy { Name = name, Description = DemoMarker };
             db.Strategies.Add(strategy);
             existing[name] = strategy;
+        }
+
+        // Kontrol listesi olmayan ÖRNEK stratejilere örnek kurallar eklenir (kullanıcının kendi stratejilerine dokunulmaz).
+        foreach (Strategy strategy in StrategyNames.Select(n => existing[n]).Where(s => s.Description == DemoMarker && s.Rules.Count == 0))
+        {
+            for (int i = 0; i < ChecklistRules.Length; i++)
+                strategy.Rules.Add(new StrategyRule { Text = ChecklistRules[i], SortOrder = i });
         }
         return existing;
     }

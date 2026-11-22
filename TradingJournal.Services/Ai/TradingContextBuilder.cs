@@ -56,6 +56,18 @@ public class TradingContextBuilder
         AppendGroup(sb, "STRATEJİ", closed, t => t.Strategy?.Name ?? "(stratejisiz)");
         AppendGroup(sb, "İŞLEMDE KALMA SÜRESİ", closed, t => HoldBucket(t));
         AppendGroup(sb, "UYGULAMA PUANI (1-5 yıldız)", closed, t => t.Rating is int r ? $"{r} yıldız" : "puansız");
+        AppendGroup(sb, "KURAL UYUMU (strateji kontrol listesi)", closed, t => t.Compliance.ToTurkish());
+
+        // En çok çiğnenen kurallar (kontrol listesi kullanılıyorsa).
+        ComplianceSummary compliance = new RuleComplianceService(_statistics).Calculate(closed);
+        if (compliance.Rules.Count > 0)
+        {
+            sb.AppendLine("EN ÇOK ÇİĞNENEN KURALLAR");
+            foreach (RuleImpact rule in compliance.Rules.Take(5))
+                sb.AppendLine($"\"{rule.Rule}\" ({rule.Strategy}): {rule.Broken}/{rule.Tracked} işlemde çiğnendi; " +
+                              $"çiğnenince ort. {R(rule.AverageRWhenBroken)}, uyulunca ort. {R(rule.AverageRWhenMet)}.");
+            sb.AppendLine();
+        }
 
         // Etiketler çoka-çok: bir işlem birden fazla etikette sayılır.
         var tagGroups = closed.SelectMany(t => t.Tags.Select(tag => (Tag: tag.Name, Trade: t)))

@@ -2,6 +2,7 @@ using System.Data;
 using System.Reflection;
 using TradingJournal.Core.Entities;
 using TradingJournal.Core.Enums;
+using TradingJournal.Services.Analytics;
 using TradingJournal.Services.Statistics;
 
 namespace TradingJournal.UI.Analytics;
@@ -23,6 +24,7 @@ public class AnalyticsRow
     public string Hour { get; init; } = string.Empty;
     public string Month { get; init; } = string.Empty;
     public string Strategy { get; init; } = string.Empty;
+    public string Compliance { get; init; } = string.Empty;
     public string Account { get; init; } = string.Empty;
     public string Outcome { get; init; } = string.Empty;
     public string HoldBucket { get; init; } = string.Empty;
@@ -58,6 +60,7 @@ public class AnalyticsRow
             Hour = $"{t.OpenTime.Hour:00}:00",
             Month = t.OpenTime.ToString("yyyy-MM"),
             Strategy = t.Strategy?.Name ?? "(stratejisiz)",
+            Compliance = t.Compliance.ToTurkish(),
             Account = t.Account?.Name ?? "?",
             Outcome = pnl > 0 ? "Kazanç" : pnl < 0 ? "Kayıp" : "Başa baş",
             HoldBucket = minutes switch

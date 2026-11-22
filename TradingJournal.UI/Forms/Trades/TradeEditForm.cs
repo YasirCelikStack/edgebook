@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using DevExpress.XtraEditors;
+using DevExpress.XtraEditors.Controls;
+using Microsoft.EntityFrameworkCore;
 using DevExpress.XtraLayout;
 using DevExpress.XtraLayout.Utils;
 using TradingJournal.Core.Entities;
@@ -25,6 +27,7 @@ public class TradeEditForm : DialogFormBase
     private Trade? _trade;
     private List<Instrument> _instruments = new();
     private List<Tag> _allTags = new();
+    private List<Strategy> _strategies = new();
 
     private readonly LookUpEdit _account = EditorFactory.Lookup(nameof(Account.Name));
     private readonly LookUpEdit _instrument = EditorFactory.Lookup(nameof(Instrument.Symbol));
@@ -43,12 +46,17 @@ public class TradeEditForm : DialogFormBase
     private readonly RatingControl _rating = new();
     private readonly CheckedComboBoxEdit _tags = new();
     private readonly MemoEdit _notes = new();
+    private readonly CheckedListBoxControl _checklist = new() { CheckOnClick = true };
 
     private readonly LayoutControlItem _lotItem;
     private readonly LayoutControlItem _quantityItem;
     private readonly LayoutControlItem _leverageItem;
     private readonly LayoutControlItem _exitPriceItem;
     private readonly LayoutControlItem _closeTimeItem;
+    private readonly LayoutControlItem _checklistItem;
+
+    private const int BaseHeight = 560;
+    private const int ChecklistHeight = 150;
 
     // Kaydedilen işlemin Id'si: yeni işlem eklenince listede onu seçmek için.
     public int? SavedTradeId => _trade?.Id;
@@ -77,12 +85,15 @@ public class TradeEditForm : DialogFormBase
         _exitPriceItem = AddField("Çıkış fiyatı", _exitPrice);
         _closeTimeItem = AddField("Kapanış zamanı", _closeTime);
         AddField("Strateji", _strategy);
+        _checklistItem = AddField("Kontrol listesi\n(uyduğunu işaretle)", _checklist, height: ChecklistHeight);
+        _checklistItem.Visibility = LayoutVisibility.Never;
         AddField("Etiketler", _tags);
         AddField("Uygulama puanı", _rating);
         AddField("Notlar", _notes, height: 90);
-        FitHeight(560);
+        FitHeight(BaseHeight);
 
         _instrument.EditValueChanged += (_, _) => UpdateTypeSpecificFields();
+        _strategy.EditValueChanged += (_, _) => RebuildChecklist();
     }
 
     protected override async void OnLoad(EventArgs e)
@@ -109,7 +120,8 @@ public class TradeEditForm : DialogFormBase
     {
         _account.Properties.DataSource = await new Repository<Account>(_db).GetAllAsync();
         _instruments = await new Repository<Instrument>(_db).GetAllAsync();
-        _strategy.Properties.DataSource = await new Repository<Strategy>(_db).FindAsync(s => s.IsActive);
+        // Stratejiler kontrol listeleriyle (kurallarıyla) birlikte yüklenir.
+        _strategies = await _db.Strategies.Include(s => s.Rules).Where(s => s.IsActive).OrderBy(s => s.Name).ToListAsync();
         _allTags = await new Repository<Tag>(_db).GetAllAsync();
 
         if (_tradeId is int id)
@@ -123,8 +135,13 @@ public class TradeEditForm : DialogFormBase
 
             // Pasif bir strateji seçiliyse listede yine de görünsün.
             if (_trade.Strategy is { IsActive: false } inactive)
-                _strategy.Properties.DataSource = ((List<Strategy>)_strategy.Properties.DataSource).Append(inactive).ToList();
+            {
+                await _db.Entry(inactive).Collection(s => s.Rules).LoadAsync();
+                _strategies.Add(inactive);
+            }
         }
+
+        _strategy.Properties.DataSource = _strategies;
 
         _instrument.Properties.DataSource = _instruments;
         foreach (Tag tag in _allTags)
@@ -136,6 +153,7 @@ public class TradeEditForm : DialogFormBase
             LoadTrade(_trade);
 
         UpdateTypeSpecificFields();
+        RebuildChecklist();
     }
 
     private void LoadDefaults()
@@ -200,6 +218,52 @@ public class TradeEditForm : DialogFormBase
     private Instrument? SelectedInstrument
         => _instrument.EditValue is int id ? _instruments.FirstOrDefault(i => i.Id == id) : null;
 
+    private Strategy? SelectedStrategy
+        => _strategy.EditValue is int id ? _strategies.FirstOrDefault(s => s.Id == id) : null;
+
+    // Seçili stratejinin kuralları kontrol listesi olarak gösterilir. Düzenlenen işlemde
+    // daha önce verilen cevaplar işaretli gelir. Kuralı olmayan stratejide liste gizlenir.
+    private void RebuildChecklist()
+    {
+        _checklist.Items.Clear();
+        List<StrategyRule> rules = SelectedStrategy?.Rules.OrderBy(r => r.SortOrder).ToList() ?? new List<StrategyRule>();
+        Dictionary<int, bool> answers = _trade?.RuleChecks.ToDictionary(c => c.StrategyRuleId, c => c.IsMet) ?? new Dictionary<int, bool>();
+
+        foreach (StrategyRule rule in rules)
+        {
+            bool met = answers.TryGetValue(rule.Id, out bool value) && value;
+            _checklist.Items.Add(rule.Id, rule.Text, met ? CheckState.Checked : CheckState.Unchecked, true);
+        }
+
+        bool visible = rules.Count > 0;
+        if ((_checklistItem.Visibility == LayoutVisibility.Always) == visible) return;
+        _checklistItem.Visibility = visible ? LayoutVisibility.Always : LayoutVisibility.Never;
+        FitHeight(visible ? BaseHeight + ChecklistHeight : BaseHeight);
+    }
+
+    // Kontrol listesi cevaplarını işleme yazar. Hiçbir madde işaretlenmediyse liste "doldurulmadı"
+    // sayılır ve cevap kaydedilmez (yoksa doldurmayı unutmak "tüm kuralları çiğnedim" gibi görünürdü).
+    private void ApplyChecklist(Trade trade)
+    {
+        Dictionary<int, bool> answers = _checklist.Items
+            .Cast<CheckedListBoxItem>()
+            .ToDictionary(i => (int)i.Value, i => i.CheckState == CheckState.Checked);
+        if (!answers.Values.Any(met => met))
+            answers.Clear();
+
+        foreach (TradeRuleCheck old in trade.RuleChecks.Where(c => !answers.ContainsKey(c.StrategyRuleId)).ToList())
+            trade.RuleChecks.Remove(old);
+
+        foreach ((int ruleId, bool met) in answers)
+        {
+            TradeRuleCheck? existing = trade.RuleChecks.FirstOrDefault(c => c.StrategyRuleId == ruleId);
+            if (existing is not null)
+                existing.IsMet = met;
+            else
+                trade.RuleChecks.Add(new TradeRuleCheck { StrategyRuleId = ruleId, IsMet = met });
+        }
+    }
+
     // Forex seçilince lot, kripto seçilince miktar ve kaldıraç alanı görünür.
     private void UpdateTypeSpecificFields()
     {
@@ -262,6 +326,8 @@ public class TradeEditForm : DialogFormBase
         trade.Tags.Clear();
         foreach (Tag tag in _allTags.Where(t => selectedTagIds.Contains(t.Id)))
             trade.Tags.Add(tag);
+
+        ApplyChecklist(trade);
 
         var repository = new TradeRepository(_db);
         if (_trade is null)

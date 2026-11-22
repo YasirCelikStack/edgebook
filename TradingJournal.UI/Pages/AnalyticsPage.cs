@@ -28,6 +28,9 @@ public class AnalyticsPage : PageBase
     };
 
     private readonly CardPanel _pivotCard = new("Pivot tablo") { Dock = DockStyle.Fill };
+    private readonly RuleComplianceService _compliance = new();
+    private readonly CardPanel _complianceCard = new("Kural uyumu") { Hint = "kontrol listesi" };
+    private readonly InsightList _complianceList = new() { Dock = DockStyle.Fill };
     private readonly CardPanel _behaviorCard = new("Davranışın");
     private readonly InsightList _behavior = new() { Dock = DockStyle.Fill };
     private readonly CardPanel _bestCard = new("En güçlü kurulumların") { Hint = $"en az {MinTradesForEdge} işlem" };
@@ -65,6 +68,7 @@ public class AnalyticsPage : PageBase
 
         _pivotCard.Controls.Add(_pivot);
         _behaviorCard.Controls.Add(_behavior);
+        _complianceCard.Controls.Add(_complianceList);
         _bestCard.Controls.Add(_best);
         _worstCard.Controls.Add(_worst);
 
@@ -72,7 +76,7 @@ public class AnalyticsPage : PageBase
         _side = new XtraScrollableControl { Dock = DockStyle.Right, Width = 372, BackColor = Theme.Background, Padding = new Padding(0, 0, 4, 0) };
         _side.Appearance.BackColor = Theme.Background;
         // Dock=Top'ta son eklenen en üstte durur: alttan üste doğru ekliyoruz, aralara boşluk koyuyoruz.
-        CardPanel[] order = [_worstCard, _bestCard, _behaviorCard];
+        CardPanel[] order = [_worstCard, _bestCard, _behaviorCard, _complianceCard];
         for (int i = 0; i < order.Length; i++)
         {
             order[i].Dock = DockStyle.Top;
@@ -131,6 +135,7 @@ public class AnalyticsPage : PageBase
         _pivotCard.Hint = $"{closed.Count} kapanmış işlem";
         _pivotCard.Invalidate();
 
+        UpdateCompliance(closed);
         UpdateBehavior(trades);
         UpdateEdges(closed);
         FitSideCards();
@@ -179,9 +184,43 @@ public class AnalyticsPage : PageBase
     // Kartın yüksekliği = başlık alanı + satırlar. Böylece alttaki satırlar kesilmez.
     private void FitSideCards()
     {
+        _complianceCard.Height = 44 + _complianceList.PreferredHeight + 16;
         _behaviorCard.Height = 44 + _behavior.PreferredHeight + 16;
         _bestCard.Height = 44 + _best.PreferredHeight + 16;
         _worstCard.Height = 44 + _worst.PreferredHeight + 16;
+    }
+
+    // Kontrol listesine uyulan ve çiğnenen işlemlerin karşılaştırması + en çok çiğnenen kurallar.
+    private void UpdateCompliance(List<Trade> closed)
+    {
+        ComplianceSummary c = _compliance.Calculate(closed);
+        if (c.Tracked == 0)
+        {
+            _complianceList.SetLines(new List<InsightList.Line>(),
+                "Tanımlar > Stratejiler'de bir stratejiye kontrol listesi ekle, işlem girerken uyduğun kuralları işaretle. " +
+                "Kurala uyduğun ve uymadığın işlemler burada karşılaştırılır.");
+            return;
+        }
+
+        static string R(decimal? r) => r is decimal v ? $"{v:+0.00;-0.00;0.00}R" : "-";
+        static string Detail(Services.Statistics.TradeStatistics s)
+            => s.TotalTrades == 0 ? "işlem yok" : $"%{s.WinRate:0} başarı · {s.TotalTrades} işlem · {s.NetProfit:+#,0;-#,0;0}";
+
+        var lines = new List<InsightList.Line>
+        {
+            new("Kurallara uyduğunda", R(c.Followed.AverageR), Detail(c.Followed), Theme.ForValue(c.Followed.AverageR)),
+            new("Kural çiğnediğinde", R(c.Broken.AverageR), Detail(c.Broken), Theme.ForValue(c.Broken.AverageR)),
+            new("Uyum oranı", c.FollowRate is decimal rate ? $"%{rate:0}" : "-",
+                $"kontrol listesi doldurulan {c.Tracked} işlemde" + (c.NotTracked > 0 ? $" ({c.NotTracked} işlemde liste yok)" : ""),
+                c.FollowRate >= 80 ? Theme.Profit : c.FollowRate >= 50 ? Theme.Warning : Theme.Loss)
+        };
+        foreach (RuleImpact rule in c.Rules.Take(3))
+        {
+            lines.Add(new($"⚠ {rule.Rule}", $"{rule.Broken} kez",
+                $"çiğnenince {R(rule.AverageRWhenBroken)} · uyulunca {R(rule.AverageRWhenMet)} · {rule.Strategy}",
+                Theme.Warning));
+        }
+        _complianceList.SetLines(lines);
     }
 
     private void UpdateBehavior(List<Trade> trades)

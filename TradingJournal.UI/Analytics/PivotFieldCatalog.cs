@@ -22,6 +22,7 @@ public static class PivotFieldCatalog
         new("Hour", "Saat (TR)", nameof(AnalyticsRow.Hour)),
         new("Month", "Ay", nameof(AnalyticsRow.Month)),
         new("Strategy", "Strateji", nameof(AnalyticsRow.Strategy)),
+        new("Compliance", "Kural uyumu", nameof(AnalyticsRow.Compliance)),
         new("Account", "Hesap", nameof(AnalyticsRow.Account)),
         new("Outcome", "Sonuç", nameof(AnalyticsRow.Outcome)),
         new("HoldBucket", "İşlemde kalma", nameof(AnalyticsRow.HoldBucket)),

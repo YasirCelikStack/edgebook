@@ -36,6 +36,10 @@ public sealed record AnalysisPreset(string Name, string Description, string[] Ro
             "Hangi setup gerçekten çalışıyor?",
             ["Strategy"], [], ["Count", "WinRate", "AvgR", "NetPnL", "AvgHold", "AvgRiskPct"]),
 
+        new("Kural uyumu",
+            "Kontrol listene uyduğun işlemlerle kural çiğnediğin işlemler arasındaki fark. Stratejiye göre kırılım.",
+            ["Compliance"], ["Strategy"], ["Count", "AvgR", "NetPnL"]),
+
         new("Aylık",
             "Ay ay gelişimin.",
             ["Month"], [], ["Count", "WinRate", "AvgR", "NetPnL"]),

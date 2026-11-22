@@ -298,6 +298,12 @@ public class TradeDetailPanel : Panel
         };
         string duration = trade.CloseTime is DateTime close ? FormatDuration(close - trade.OpenTime) : "Devam ediyor";
 
+        // Kontrol listesi: "3/4 kural" (yeşil: hepsine uyuldu, turuncu: en az biri çiğnendi).
+        int met = trade.RuleChecks.Count(c => c.IsMet);
+        (string checklist, Color? checklistColor) = trade.RuleChecks.Count == 0
+            ? ("-", (Color?)null)
+            : ($"{met}/{trade.RuleChecks.Count} kurala uyuldu", met == trade.RuleChecks.Count ? Theme.Profit : Theme.Warning);
+
         return
         [
             ("Giriş", trade.EntryPrice.ToString("0.#####"), null),
@@ -309,6 +315,7 @@ public class TradeDetailPanel : Panel
             ("Seans", SessionClassifier.GetSession(trade.OpenTime).ToTurkish(), null),
             ("Süre", duration, null),
             ("Strateji", trade.Strategy?.Name ?? "-", null),
+            ("Kontrol listesi", checklist, checklistColor),
             ("Puan", trade.Rating is int r ? new string('★', r) + new string('☆', 5 - r) : "-", Theme.Warning),
         ];
     }
