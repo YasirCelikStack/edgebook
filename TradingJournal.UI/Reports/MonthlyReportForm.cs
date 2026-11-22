@@ -152,7 +152,7 @@ public class MonthlyReportForm : XtraForm
             data.CoachProvider = coach.ProviderName;
             SetStatus("");
         }
-        catch (Exception ex) when (ex is AiException or HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is AiException or System.Net.Http.HttpRequestException or TaskCanceledException)
         {
             // Yorum alınamazsa rapor yine de hazırlanır, sadece o bölüm olmaz.
             SetStatus("");
