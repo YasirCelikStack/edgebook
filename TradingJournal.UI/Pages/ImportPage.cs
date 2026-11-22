@@ -228,20 +228,24 @@ public class ImportPage : PageBase
         _grid.RepositoryItems.Add(iconText);
         select.ColumnEdit = iconText;
 
-        AddColumn(nameof(PreviewRow.State), "Durum", 80);
-        GridColumn date = AddColumn(nameof(PreviewRow.OpenTime), "Tarih", 110);
+        // Sabit genişlikli sütunlar (tarih, yön, R) hiç kesilmez; kalan alan diğerlerine paylaştırılır.
+        AddColumn(nameof(PreviewRow.State), "Durum", 70);
+        GridColumn date = AddColumn(nameof(PreviewRow.OpenTime), "Tarih", 112);
+        date.OptionsColumn.FixedWidth = true;
         date.DisplayFormat.FormatType = FormatType.DateTime;
         date.DisplayFormat.FormatString = "dd.MM.yy HH:mm";
-        AddColumn(nameof(PreviewRow.Symbol), "Sembol", 80);
-        AddColumn(nameof(PreviewRow.Direction), "Yön", 60);
-        AddColumn(nameof(PreviewRow.Entry), "Giriş", 80);
-        AddColumn(nameof(PreviewRow.StopLoss), "Stop", 80);
-        AddColumn(nameof(PreviewRow.TakeProfit), "Hedef", 80);
-        AddColumn(nameof(PreviewRow.Result), "Sonuç", 90);
-        GridColumn r = AddColumn(nameof(PreviewRow.R), "R", 60);
+        AddColumn(nameof(PreviewRow.Symbol), "Sembol", 95);
+        GridColumn direction = AddColumn(nameof(PreviewRow.Direction), "Yön", 58);
+        direction.OptionsColumn.FixedWidth = true;
+        AddColumn(nameof(PreviewRow.Entry), "Giriş", 85);
+        AddColumn(nameof(PreviewRow.StopLoss), "Stop", 85);
+        AddColumn(nameof(PreviewRow.TakeProfit), "Hedef", 85);
+        AddColumn(nameof(PreviewRow.Result), "Sonuç", 60);
+        GridColumn r = AddColumn(nameof(PreviewRow.R), "R", 68);
+        r.OptionsColumn.FixedWidth = true;
         r.DisplayFormat.FormatType = FormatType.Numeric;
         r.DisplayFormat.FormatString = "+0.00;-0.00;0.00";
-        AddColumn(nameof(PreviewRow.Setup), "Setup", 140);
+        AddColumn(nameof(PreviewRow.Setup), "Setup", 100);
         GridColumn shot = AddColumn(ShotField, "Görsel", 60);
         shot.OptionsColumn.FixedWidth = true;
         shot.ColumnEdit = iconText;
@@ -252,6 +256,8 @@ public class ImportPage : PageBase
         {
             if (e.Column.FieldName == ShotField)
                 e.DisplayText = e.Value is bool has ? (has ? "\uE91B" : "—") : "";
+            else if (e.Column.FieldName is nameof(PreviewRow.Entry) or nameof(PreviewRow.StopLoss) or nameof(PreviewRow.TakeProfit))
+                e.DisplayText = e.Value is decimal price ? FormatPrice(price) : "";
             else if (e.Column.FieldName == SelectField)
                 e.DisplayText = e.Value is true ? CheckedGlyph : UncheckedGlyph;
         };
@@ -304,6 +310,15 @@ public class ImportPage : PageBase
             SetSelection(_ => !allSelected);
             DXMouseEventArgs.GetMouseArgs(e).Handled = true;
         };
+    }
+
+    // Chart Vault fiyatları çizimden geldiği için 70091,4111716 gibi uzun ondalıklı olabilir.
+    // Fiyatın büyüklüğüne göre okunur basamak sayısı: BTC 70091,41 · XAU 2401,55 · USDJPY 151,234 · EURUSD 1,08543
+    private static string FormatPrice(decimal price)
+    {
+        decimal abs = Math.Abs(price);
+        string format = abs >= 1000 ? "#,##0.00" : abs >= 10 ? "0.000" : abs >= 1 ? "0.00000" : "0.000000";
+        return price.ToString(format);
     }
 
     private GridColumn AddColumn(string field, string caption, int width)
