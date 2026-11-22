@@ -82,6 +82,31 @@ public class TradingCoachService
         return Clean(await _provider.GenerateAsync(SystemPrompt, messages, cancellationToken));
     }
 
+    // Aylık rapora girecek kısa koç yorumu (tek bölüm, düz paragraf).
+    public async Task<string> CreateMonthlyCommentAsync(Reports.MonthlyReportData data, CancellationToken cancellationToken = default)
+    {
+        if (data.Stats.TotalTrades < 3)
+            throw new AiException("Koç yorumu için bu ay en az 3 kapanmış işlem gerekiyor.");
+
+        const string request =
+            """
+            Aşağıda bir trader'ın aylık özeti var. Bu özet bir PDF rapora girecek; rapora "KOÇ YORUMU" bölümü yaz.
+            - Toplam 100-140 kelime, en fazla 2 kısa paragraf. Başlık, madde işareti ve markdown KULLANMA.
+            - Sırayla: ayın en önemli olumlu yanı, en önemli sorunu (sayıyla) ve gelecek ay için TEK somut, ölçülebilir öneri.
+            - Kural uyumu (kontrol listesi) verisi varsa mutlaka değerlendir: kurala uyunca ve çiğneyince sonuç farkı.
+            - Günlük notlar varsa plan yazılan günler, duygu durumu ve kullanıcının kendi değerlendirmeleriyle sonuçları ilişkilendir;
+              ama notlardaki ifadeleri olduğu gibi kopyalama.
+            - Raporun diğer bölümlerinde zaten bulunan sayıları tek tek tekrar sıralama; yorumla.
+
+            VERİLER:
+            """;
+        string context = MonthlyContextBuilder.Build(data);
+        string text = await _provider.GenerateAsync(SystemPrompt, [new ChatMessage(true, request + context)], cancellationToken);
+        return Clean(text).Replace("• ", "").Trim();
+    }
+
+    public string ProviderName => _provider.Name;
+
     private static void EnsureEnoughData(IReadOnlyCollection<Trade> trades)
     {
         if (trades.Count(t => t.IsClosed) < 3)

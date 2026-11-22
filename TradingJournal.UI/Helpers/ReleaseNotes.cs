@@ -11,6 +11,18 @@ public static class ReleaseNotes
 
     public static IReadOnlyList<Release> All { get; } =
     [
+        new(new Version(1, 0, 4),
+        [
+            new("\uE73A", "Strateji kontrol listesi",
+                "Tanımlar > Stratejiler'de her setup'a kurallarını yaz (her satır bir kural). İşlem girerken uyduğun kuralları işaretle; " +
+                "Analiz sayfasındaki \"Kural uyumu\" kartı, kurallara uyduğun ve çiğnediğin işlemlerin sonucunu karşılaştırır."),
+            new("\uE70B", "Günlük plan ve değerlendirme",
+                "Takvimde bir güne tıkla: seans öncesi planını, gün sonu değerlendirmeni ve duygu durumunu yaz. " +
+                "Notlu günler takvimde işaretlenir; çift tıklayınca o günün işlemleri açılır."),
+            new("\uE99A", "Aylık rapora koç yorumu",
+                "Aylık raporda \"Yapay zeka koç yorumu ekle\" seçeneği: Gemini ayın verilerine, kural uyumuna ve günlük notlarına bakıp " +
+                "rapora kısa bir değerlendirme yazar. Rapora kural uyumu tablosu da eklendi.")
+        ]),
         new(new Version(1, 0, 3),
         [
             new("", "Aylık PDF rapor",

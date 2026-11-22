@@ -2,6 +2,7 @@ using System.Globalization;
 using TradingJournal.Core.Entities;
 using TradingJournal.Core.Enums;
 using TradingJournal.Core.Exceptions;
+using TradingJournal.Services.Analytics;
 using TradingJournal.Services.Statistics;
 
 namespace TradingJournal.Services.Reports;
@@ -12,10 +13,12 @@ public class MonthlyReportService
 {
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
     private readonly IStatisticsService _statistics;
+    private readonly RuleComplianceService _compliance;
 
     public MonthlyReportService(IStatisticsService? statistics = null)
     {
         _statistics = statistics ?? new StatisticsService();
+        _compliance = new RuleComplianceService(_statistics);
     }
 
     public static string MonthName(DateTime month) => Turkish.DateTimeFormat.GetMonthName(month.Month);
@@ -31,7 +34,9 @@ public class MonthlyReportService
 
     // accounts: raporun kapsadığı hesaplar (tek hesap ya da "tüm hesaplar").
     // trades: bu hesapların TÜM işlemleri (ay başı bakiyesini bulmak için önceki aylar da gerekir).
-    public MonthlyReportData Build(DateTime month, IReadOnlyCollection<Account> accounts, IReadOnlyCollection<Trade> trades)
+    // notes: ayın günlük notları (yoksa boş).
+    public MonthlyReportData Build(DateTime month, IReadOnlyCollection<Account> accounts, IReadOnlyCollection<Trade> trades,
+        IReadOnlyCollection<DailyNote>? notes = null)
     {
         if (accounts.Count == 0)
             throw new DomainException("Rapor için en az bir hesap gerekli.");
@@ -76,7 +81,9 @@ public class MonthlyReportService
             ByWeekday = Breakdown(inMonth, t => ((int)t.OpenTime.DayOfWeek + 6) % 7,
                 i => Turkish.DateTimeFormat.GetDayName((DayOfWeek)((i + 1) % 7)), sortByKey: true),
             Insights = [],
-            Trades = inMonth.Select(ToRow).ToList()
+            Trades = inMonth.Select(ToRow).ToList(),
+            Compliance = _compliance.Calculate(inMonth),
+            Notes = (notes ?? Array.Empty<DailyNote>()).Where(n => n.Date >= start && n.Date < end).OrderBy(n => n.Date).ToList()
         };
 
         data.Insights.AddRange(BuildInsights(data));
@@ -152,9 +159,42 @@ public class MonthlyReportService
         if (weakSession is not null)
             yield return $"{weakSession.Label} seansı bu ay zararda: {weakSession.Trades} işlemde {Money(weakSession.NetProfit, d.Currency)}.";
 
+        ComplianceSummary c = d.Compliance;
+        if (c.Tracked > 0)
+        {
+            string text = $"Kontrol listesi doldurulan {c.Tracked} işlemin %{c.FollowRate:0}'inde tüm kurallara uydun.";
+            if (c.Followed.TotalTrades > 0 && c.Broken.TotalTrades > 0)
+                text += $" Uyduğunda ortalama {R(c.Followed.AverageR)}, kural çiğnediğinde {R(c.Broken.AverageR)}.";
+            if (c.Rules.Count > 0)
+                text += $" En çok çiğnenen kural: \"{c.Rules[0].Rule}\" ({c.Rules[0].Broken} kez).";
+            yield return text;
+        }
+
+        // Günlük notlar: plan yazılan günlerle yazılmayan günlerin sonucu.
+        if (d.Notes.Count > 0 && d.Days.Count > 0)
+        {
+            HashSet<DateTime> planned = d.Notes.Where(n => !string.IsNullOrWhiteSpace(n.Plan)).Select(n => n.Date).ToHashSet();
+            List<DailyResult> withPlan = d.Days.Where(x => planned.Contains(x.Date)).ToList();
+            List<DailyResult> withoutPlan = d.Days.Where(x => !planned.Contains(x.Date)).ToList();
+            if (withPlan.Count > 0 && withoutPlan.Count > 0)
+            {
+                yield return $"Plan yazdığın {withPlan.Count} işlem gününde net {Money(withPlan.Sum(x => x.NetPnL), d.Currency)}, " +
+                             $"plansız {withoutPlan.Count} günde net {Money(withoutPlan.Sum(x => x.NetPnL), d.Currency)}.";
+            }
+
+            List<DailyNote> withMood = d.Notes.Where(n => n.Mood.HasValue).ToList();
+            if (withMood.Count >= 3)
+            {
+                decimal average = (decimal)withMood.Average(n => n.Mood!.Value);
+                yield return $"Ortalama duygu durumun {average:0.0}/5 ({withMood.Count} gün).";
+            }
+        }
+
         if (d.OpenTradeCount > 0)
             yield return $"Ay içinde açılıp hâlâ açık {d.OpenTradeCount} işlem var; bu rapora dahil değil.";
     }
+
+    private static string R(decimal? r) => r is decimal v ? v.ToString("+0.00;-0.00;0.00", Turkish) + "R" : "—";
 
     public static string Money(decimal value, string currency)
     {

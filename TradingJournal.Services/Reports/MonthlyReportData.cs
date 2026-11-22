@@ -1,3 +1,5 @@
+using TradingJournal.Core.Entities;
+using TradingJournal.Services.Analytics;
 using TradingJournal.Services.Statistics;
 
 namespace TradingJournal.Services.Reports;
@@ -29,6 +31,16 @@ public class MonthlyReportData
     public required List<BreakdownRow> ByWeekday { get; init; }
     public required List<string> Insights { get; init; }       // Kısa, otomatik gözlemler
     public required List<ReportTradeRow> Trades { get; init; }
+
+    // Strateji kontrol listesine uyum (bu ay kapanan işlemlerde).
+    public required ComplianceSummary Compliance { get; init; }
+
+    // Ayın günlük notları (plan / değerlendirme / duygu durumu).
+    public required List<DailyNote> Notes { get; init; }
+
+    // İsteğe bağlı yapay zeka koç yorumu; rapor oluşturulmadan önce doldurulur.
+    public string? CoachComment { get; set; }
+    public string? CoachProvider { get; set; }
 
     public bool IsEmpty => Stats.TotalTrades == 0;
 }

@@ -5,6 +5,7 @@ using DevExpress.Utils;
 using DevExpress.XtraPrinting;
 using DevExpress.XtraPrinting.Drawing;
 using DevExpress.XtraReports.UI;
+using TradingJournal.Services.Analytics;
 using TradingJournal.Services.Reports;
 using TradingJournal.Services.Statistics;
 using TradingJournal.UI.Helpers;
@@ -15,8 +16,8 @@ namespace TradingJournal.UI.Reports;
 // Aylık performans raporu (DevExpress XtraReports), tasarımcı kullanılmadan kodla kurulur.
 // Kağıda basılacağı için uygulamanın koyu teması değil, açık ve sade bir tema kullanılır.
 //
-//   Sayfa 1: başlık, 6 KPI kutusu, bakiye, equity curve, günlük kâr/zarar, otomatik gözlemler
-//   Sayfa 2: setup / sembol / seans / gün kırılımları
+//   Sayfa 1: başlık, 6 KPI kutusu, bakiye, equity curve, günlük kâr/zarar, otomatik gözlemler, (varsa) koç yorumu
+//   Sayfa 2: setup / sembol / seans / gün kırılımları, kural uyumu (kontrol listesi)
 //   Sayfa 3+: ayın tüm işlemleri (başlık satırı her sayfada tekrar eder)
 //
 // Rapor hiçbir hesap yapmaz; tüm değerler MonthlyReportService'in hazırladığı MonthlyReportData'dan gelir.
@@ -62,10 +63,14 @@ public class MonthlyReport : XtraReport
         y = BuildEquity(header, y + 18);
         y = BuildDaily(header, y + 18);
         y = BuildInsights(header, y + 18);
+        if (!string.IsNullOrWhiteSpace(data.CoachComment))
+            y = BuildCoachComment(header, y + 14);
 
         // Kırılımlar yeni sayfadan başlar.
         header.Controls.Add(new XRPageBreak { LocationF = new PointF(0, y + 4) });
         y = BuildBreakdowns(header, y + 8);
+        if (data.Compliance.Tracked > 0)
+            y = BuildCompliance(header, y + 24);
         header.HeightF = y + 4;
 
         Bands.Add(top);
@@ -250,6 +255,49 @@ public class MonthlyReport : XtraReport
         return y;
     }
 
+    // Yapay zeka koç yorumu: açık mavi zeminli, uzunluğuna göre büyüyen tek blok.
+    private float BuildCoachComment(Band band, float y)
+    {
+        y = SectionTitle(band, y, "Koç yorumu", $"Yapay zeka ({_data.CoachProvider ?? "Gemini"}) · rapordaki verilere göre");
+        XRLabel comment = Label(_data.CoachComment!, 0, y, ContentWidth, 40, F(9), Ink);
+        comment.BackColor = TileBack;
+        comment.Padding = new PaddingInfo(12, 12, 10, 10);
+        comment.WordWrap = true;
+        comment.CanGrow = true;
+        comment.TextAlignment = TextAlignment.TopLeft;
+        comment.Borders = BorderSide.Left;
+        comment.BorderColor = Accent;
+        comment.BorderWidth = 3;
+        band.Controls.Add(comment);
+        return y + 44;
+    }
+
+    // Kontrol listesi: uyulan / çiğnenen işlemlerin karşılaştırması ve en çok çiğnenen kurallar.
+    private float BuildCompliance(Band band, float y)
+    {
+        ComplianceSummary c = _data.Compliance;
+        y = SectionTitle(band, y, "Kural uyumu", $"Kontrol listesi doldurulan {c.Tracked} işlem · tam uyum %{c.FollowRate:0}");
+        float width = (ContentWidth - Gap) / 2;
+
+        BreakdownRow Row(string label, TradeStatistics s) => new(label, s.TotalTrades, s.WinRate, s.NetProfit, s.AverageR);
+        var summary = new List<BreakdownRow> { Row("Kurallara uyuldu", c.Followed), Row("Kural çiğnendi", c.Broken) };
+        if (c.NotTracked > 0)
+            summary.Add(new BreakdownRow("Liste doldurulmadı", c.NotTracked, 0, 0, null));
+        float left = BreakdownTable(band, 0, y, width, "Uyum", summary);
+
+        var rules = c.Rules.Take(8).Select(r => (
+            Cells: new[] { r.Rule, $"{r.Broken}/{r.Tracked}", r.AverageRWhenBroken?.ToString("+0.00;-0.00;0.00") ?? "—", r.AverageRWhenMet?.ToString("+0.00;-0.00;0.00") ?? "—" },
+            Colors: new Color?[] { null, null, ColorFor(r.AverageRWhenBroken), ColorFor(r.AverageRWhenMet) })).ToList();
+        if (rules.Count == 0)
+            rules.Add((new[] { "Hiç kural çiğnenmemiş 👏", "", "", "" }, new Color?[4]));
+        float right = Table(band, width + Gap, y, width,
+            ["Çiğnenen kural", "Çiğnendi", "Çiğnenince R", "Uyulunca R"],
+            [2.6f, 0.9f, 1.1f, 1.1f],
+            [TextAlignment.MiddleLeft, TextAlignment.MiddleRight, TextAlignment.MiddleRight, TextAlignment.MiddleRight],
+            rules);
+        return Math.Max(left, right);
+    }
+
     private float BuildBreakdowns(Band band, float y)
     {
         y = SectionTitle(band, y, "Kırılımlar", "Kapanan işlemler, net kâra göre sıralı (gün tablosu haftanın sırasıyla)");
@@ -267,39 +315,46 @@ public class MonthlyReport : XtraReport
     private float BreakdownTable(Band band, float x, float y, float width, string title, List<BreakdownRow> rows)
     {
         const int maxRows = 8;
-        const float rowHeight = 22;
-        float[] weights = [2.4f, 0.8f, 1f, 1f, 1.6f];
-        TextAlignment[] align = [TextAlignment.MiddleLeft, TextAlignment.MiddleRight, TextAlignment.MiddleRight, TextAlignment.MiddleRight, TextAlignment.MiddleRight];
-
-        var lines = new List<(string[] Cells, decimal? Net, decimal? R)>();
-        foreach (BreakdownRow row in rows.Take(maxRows))
-        {
-            string[] cells = { row.Label, row.Trades.ToString(), $"%{row.WinRate:0}", row.AverageR?.ToString("+0.00;-0.00;0.00") ?? "—", Plain(row.NetProfit, signed: true) };
-            lines.Add((cells, row.NetProfit, row.AverageR));
-        }
+        var lines = rows.Take(maxRows).Select(row => (
+            Cells: new[] { row.Label, row.Trades.ToString(), row.Trades == 0 || row.AverageR is null && row.NetProfit == 0 ? "—" : $"%{row.WinRate:0}",
+                row.AverageR?.ToString("+0.00;-0.00;0.00") ?? "—", row.NetProfit == 0 && row.AverageR is null ? "—" : Plain(row.NetProfit, signed: true) },
+            Colors: new Color?[] { null, null, null, ColorFor(row.AverageR), ColorFor(row.NetProfit) })).ToList();
         if (rows.Count > maxRows)
-            lines.Add((new[] { $"+{rows.Count - maxRows} diğer", "", "", "", "" }, null, null));
+            lines.Add((new[] { $"+{rows.Count - maxRows} diğer", "", "", "", "" }, new Color?[5]));
         if (lines.Count == 0)
-            lines.Add((new[] { "Veri yok", "", "", "", "" }, null, null));
+            lines.Add((new[] { "Veri yok", "", "", "", "" }, new Color?[5]));
 
+        return Table(band, x, y, width,
+            [title, "İşlem", "Win", "Ort. R", "Net"],
+            [2.4f, 0.8f, 1f, 1f, 1.6f],
+            [TextAlignment.MiddleLeft, TextAlignment.MiddleRight, TextAlignment.MiddleRight, TextAlignment.MiddleRight, TextAlignment.MiddleRight],
+            lines);
+    }
+
+    // Başlık satırı + veri satırlarından oluşan tablo; tablonun bittiği y konumunu döndürür.
+    private static float Table(Band band, float x, float y, float width, string[] headers, float[] weights, TextAlignment[] align,
+        List<(string[] Cells, Color?[] Colors)> rows)
+    {
+        const float rowHeight = 22;
         var table = new XRTable
         {
             LocationF = new PointF(x, y),
-            SizeF = new SizeF(width, rowHeight * (lines.Count + 1)),
+            SizeF = new SizeF(width, rowHeight * (rows.Count + 1)),
             Borders = BorderSide.None
         };
         table.BeginInit();
-        table.Rows.Add(TableRow(rowHeight, [title, "İşlem", "Win", "Ort. R", "Net"], weights, align, header: true));
-        foreach ((string[] cells, decimal? net, decimal? r) in lines)
+        table.Rows.Add(TableRow(rowHeight, headers, weights, align, header: true));
+        foreach ((string[] cells, Color?[] colors) in rows)
         {
             XRTableRow tr = TableRow(rowHeight, cells, weights, align, header: false);
-            if (net is not null) tr.Cells[4].ForeColor = ColorFor(net);
-            if (r is not null) tr.Cells[3].ForeColor = ColorFor(r);
+            for (int i = 0; i < colors.Length && i < tr.Cells.Count; i++)
+                if (colors[i] is Color color)
+                    tr.Cells[i].ForeColor = color;
             table.Rows.Add(tr);
         }
         table.EndInit();
         band.Controls.Add(table);
-        return y + rowHeight * (lines.Count + 1);
+        return y + rowHeight * (rows.Count + 1);
     }
 
     // İşlem listesi: başlık satırı her sayfada tekrar eder, satırlar sırayla zebra renkli.

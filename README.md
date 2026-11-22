@@ -46,7 +46,7 @@ Bağımlılık yönü tek taraflıdır: **UI → Services → Data → Core**.
 
 ## Veritabanı
 
-Tablolar: `Accounts`, `AccountRules`, `Instruments`, `Strategies`, `Tags`, `Trades`, `TradeTags` (çoka-çok ara tablo), `TradeScreenshots`.
+Tablolar: `Accounts`, `AccountRules`, `Instruments`, `Strategies`, `StrategyRules` (strateji kontrol listesi), `Tags`, `Trades`, `TradeTags` (çoka-çok ara tablo), `TradeRuleChecks` (işlem ↔ kural, bileşik anahtarlı ara tablo + "uyuldu mu" bilgisi), `TradeScreenshots`, `DailyNotes` (günlük plan / değerlendirme).
 
 `ForexTrade` ve `CryptoTrade`, `Trades` tablosunda `TradeType` sütunuyla ayrılır (Table-Per-Hierarchy).
 
@@ -88,8 +88,10 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **Yapay zeka koçu:** Gemini ile koç raporu ve işlemler hakkında soru-cevap (ayrıntılar aşağıda).
 - **Chart Vault:** Chart Vault web uygulamasındaki Journal işlemlerini içe aktarma (ayrıntılar aşağıda).
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
-- **Aylık rapor (PDF):** Üst çubuktaki **Aylık rapor** düğmesi. DevExpress XtraReports ile kodla kurulan, yazdırılabilir rapor: KPI özeti ve önceki ayla karşılaştırma, equity curve, günlük kâr/zarar grafiği, otomatik gözlemler, setup / sembol / seans / gün kırılımları ve ayın tüm işlemleri. Önizlenebilir veya PDF olarak kaydedilebilir. Hesaplar `MonthlyReportService`'te (Services katmanı), rapor tasarımı `MonthlyReport`'ta (UI katmanı).
+- **Aylık rapor (PDF):** Üst çubuktaki **Aylık rapor** düğmesi. DevExpress XtraReports ile kodla kurulan, yazdırılabilir rapor: KPI özeti ve önceki ayla karşılaştırma, equity curve, günlük kâr/zarar grafiği, otomatik gözlemler, setup / sembol / seans / gün kırılımları ve ayın tüm işlemleri. İsteğe bağlı olarak Gemini'nin yazdığı kısa bir koç yorumu (ayın verileri, kural uyumu ve günlük notlara göre) ve kural uyumu tablosu eklenir. Önizlenebilir veya PDF olarak kaydedilebilir. Hesaplar `MonthlyReportService`'te (Services katmanı), rapor tasarımı `MonthlyReport`'ta (UI katmanı).
 - **Yedekleme:** Tanımlar sayfasında **Yedek al** tüm veriyi (veritabanı, ekran görüntüleri, koç raporları) kullanıcının seçtiği yere tek bir `.zip` olarak kaydeder; veritabanı SQLite'ın yedekleme komutuyla tutarlı şekilde kopyalanır. **Yedekten yükle** önce mevcut veriyi otomatik yedekler (`%LocalAppData%\EdgeBook\backups`), sonra yedeği geri yükleyip uygulamayı yeniden başlatır.
+- **Strateji kontrol listesi:** Her stratejiye kurallar (`StrategyRule`) tanımlanır; işlem girerken uyulan kurallar işaretlenir (`TradeRuleCheck`, işlem ↔ kural çoka-çok ara tablosu, bileşik anahtar). Analiz sayfasında "Kural uyumu" kartı ve hazır analizi: kurala uyulan / çiğnenen işlemlerin karşılaştırması ve en çok çiğnenen kurallar (`RuleComplianceService`).
+- **Günlük notlar:** Takvimde seçilen günün seans öncesi planı, gün sonu değerlendirmesi ve duygu durumu (`DailyNote`). Notlu günler takvimde işaretlenir.
 - **Yenilikler:** Güncellemeden sonraki ilk açılışta o sürümde gelen özellikler gösterilir (`ReleaseNotes.cs`). Sürüm yazısına tıklayınca da açılır.
 
 ## Yeni sürüm yayınlama (geliştirici)
