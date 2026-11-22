@@ -55,7 +55,10 @@ public static class PivotFieldCatalog
                 Name = "field" + d.Key,
                 Caption = d.Caption,
                 Visible = false,
-                DataBinding = new DataSourceColumnBinding(d.Column)
+                DataBinding = new DataSourceColumnBinding(d.Column),
+                // Başlık düğmesindeki metin (ve sıralama oku) kesilmesin diye en az bu kadar geniş.
+                Width = d.Summary is null ? 140 : 100,
+                MinWidth = d.Summary is null ? 110 : 80
             };
 
             if (d.Summary is PivotSummaryType summary)

@@ -23,6 +23,8 @@ static class Program
         WindowsFormsSettings.DefaultFont = new Font("Segoe UI", 9.75f);
         // İnce, fareyle üzerine gelince kalınlaşan kaydırma çubukları (tablolar ve kaydırılabilir paneller için).
         WindowsFormsSettings.ScrollUIMode = ScrollUIMode.Fluent;
+        // Pivot tablodaki "Grand Total" → "Genel toplam".
+        DevExpress.XtraPivotGrid.Localization.PivotGridLocalizer.Active = new TurkishPivotLocalizer();
 
         // Yakalanmayan hatalar uygulamayı çökertmesin, kullanıcıya anlaşılır mesaj gösterilsin.
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

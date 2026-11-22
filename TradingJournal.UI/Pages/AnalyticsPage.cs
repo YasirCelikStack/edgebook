@@ -102,6 +102,8 @@ public class AnalyticsPage : PageBase
         // kesin çalışır. Eski (Legacy) motor seçili kalırsa alanlar veriyi göremez ve tablo 0 gösterir.
         _pivot.OptionsData.DataProcessingEngine = PivotDataProcessingEngine.Optimized;
         _pivot.OptionsView.ShowFilterHeaders = false;
+        // Sol üstteki ölçü düğmeleri (İşlem, Win rate...) sütun başlıklarında zaten yazıyor; dar alanda "İ..." diye kesiliyorlardı.
+        _pivot.OptionsView.ShowDataHeaders = false;
         _pivot.OptionsView.ShowColumnGrandTotals = true;
         _pivot.OptionsView.ShowRowGrandTotals = true;
         _pivot.OptionsView.ShowColumnTotals = true;
@@ -132,6 +134,7 @@ public class AnalyticsPage : PageBase
 
         _pivot.DataSource = AnalyticsRow.ToDataTable(closed.Select(AnalyticsRow.From));
         _pivot.RefreshData();
+        _pivot.BestFit(); // Sütunları içeriğe göre genişlet (başlıklar dahil).
         _pivotCard.Hint = $"{closed.Count} kapanmış işlem";
         _pivotCard.Invalidate();
 
@@ -159,6 +162,7 @@ public class AnalyticsPage : PageBase
         {
             _pivot.EndUpdate();
         }
+        _pivot.BestFit();
 
         _presetDescription.Text = "   " + preset.Description;
         for (int i = 0; i < _presetButtons.Count; i++)
