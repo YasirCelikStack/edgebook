@@ -21,6 +21,8 @@ static class Program
         // WXI temasının koyu paleti; kendi çizdiğimiz kartlar Theme sınıfındaki renkleri kullanır.
         UserLookAndFeel.Default.SetSkinStyle("WXI", "Darkness");
         WindowsFormsSettings.DefaultFont = new Font("Segoe UI", 9.75f);
+        // İnce, fareyle üzerine gelince kalınlaşan kaydırma çubukları (tablolar ve kaydırılabilir paneller için).
+        WindowsFormsSettings.ScrollUIMode = ScrollUIMode.Fluent;
 
         // Yakalanmayan hatalar uygulamayı çökertmesin, kullanıcıya anlaşılır mesaj gösterilsin.
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

@@ -95,13 +95,18 @@ public class ImportPage : PageBase
 
     private Control BuildForm()
     {
+        // Form içeriği kendi yüksekliği kadar uzar; sığmazsa DevExpress'in kaydırılabilir paneli kaydırır.
+        // (Standart Panel.AutoScroll beyaz, kalın Windows kaydırma çubukları çiziyordu; bu panel temaya uyar.)
         var table = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            BackColor = Theme.Card,
-            AutoScroll = true
+            BackColor = Theme.Card
         };
+        // Tek sütun panel genişliği kadar: yatay kaydırma çubuğu hiç çıkmaz.
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         void Field(string caption, Control editor, string? hint = null)
         {
@@ -172,7 +177,11 @@ public class ImportPage : PageBase
         table.Controls.Add(_shotsButton);
 
         table.Controls.Add(_status);
-        return table;
+
+        var scroller = new XtraScrollableControl { Dock = DockStyle.Fill, BackColor = Theme.Card };
+        scroller.Appearance.BackColor = Theme.Card;
+        scroller.Controls.Add(table);
+        return scroller;
     }
 
     // ---------------- Önizleme ----------------

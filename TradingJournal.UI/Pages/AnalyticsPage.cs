@@ -34,7 +34,7 @@ public class AnalyticsPage : PageBase
     private readonly InsightList _best = new() { Dock = DockStyle.Fill };
     private readonly CardPanel _worstCard = new("Zayıf noktaların") { Hint = $"en az {MinTradesForEdge} işlem" };
     private readonly InsightList _worst = new() { Dock = DockStyle.Fill };
-    private readonly Panel _side;
+    private readonly XtraScrollableControl _side;
 
     public AnalyticsPage(AppState state) : base(state)
     {
@@ -69,7 +69,8 @@ public class AnalyticsPage : PageBase
         _worstCard.Controls.Add(_worst);
 
         // Sağ panel: kartlar alt alta, her biri içeriği kadar uzun; sığmazsa panel kaydırılır.
-        _side = new Panel { Dock = DockStyle.Right, Width = 372, AutoScroll = true, BackColor = Theme.Background, Padding = new Padding(0, 0, 4, 0) };
+        _side = new XtraScrollableControl { Dock = DockStyle.Right, Width = 372, BackColor = Theme.Background, Padding = new Padding(0, 0, 4, 0) };
+        _side.Appearance.BackColor = Theme.Background;
         // Dock=Top'ta son eklenen en üstte durur: alttan üste doğru ekliyoruz, aralara boşluk koyuyoruz.
         CardPanel[] order = [_worstCard, _bestCard, _behaviorCard];
         for (int i = 0; i < order.Length; i++)
