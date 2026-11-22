@@ -24,7 +24,7 @@ namespace TradingJournal.UI.Reports;
 public class MonthlyReport : XtraReport
 {
     // A4 (827 x 1169, inçin yüzde biri) - 40'lık kenar boşlukları
-    private const float PageWidth = 747f;
+    private const float ContentWidth = 747f;
     private const float Gap = 12f;
 
     private static readonly Color Ink = Color.FromArgb(17, 24, 39);
@@ -97,15 +97,15 @@ public class MonthlyReport : XtraReport
         band.Controls.Add(Label("EDGEBOOK  ·  AYLIK PERFORMANS RAPORU", 54, 0, 450, 16, F(7.5f, bold: true), Accent));
         band.Controls.Add(Label(period, 54, 14, 450, 30, F(18, bold: true), Ink));
         band.Controls.Add(Label(_data.AccountLabel, 54, 42, 450, 18, F(10), Muted));
-        band.Controls.Add(Label($"Oluşturma: {_data.GeneratedAt:dd.MM.yyyy HH:mm}", PageWidth - 260, 14, 260, 16, F(8), Faint, TextAlignment.MiddleRight));
+        band.Controls.Add(Label($"Oluşturma: {_data.GeneratedAt:dd.MM.yyyy HH:mm}", ContentWidth - 260, 14, 260, 16, F(8), Faint, TextAlignment.MiddleRight));
 
         string balance = $"Bakiye  {Plain(_data.StartBalance)}  →  {Plain(_data.EndBalance)}";
-        band.Controls.Add(Label(balance, PageWidth - 300, 34, 300, 18, F(9, bold: true), Ink, TextAlignment.MiddleRight));
+        band.Controls.Add(Label(balance, ContentWidth - 300, 34, 300, 18, F(9, bold: true), Ink, TextAlignment.MiddleRight));
 
         band.Controls.Add(new XRPanel
         {
             LocationF = new PointF(0, 68),
-            SizeF = new SizeF(PageWidth, 3),
+            SizeF = new SizeF(ContentWidth, 3),
             BackColor = Accent,
             Borders = BorderSide.None
         });
@@ -134,7 +134,7 @@ public class MonthlyReport : XtraReport
 
         const int perRow = 3;
         const float height = 66;
-        float width = (PageWidth - Gap * (perRow - 1)) / perRow;
+        float width = (ContentWidth - Gap * (perRow - 1)) / perRow;
         for (int i = 0; i < tiles.Length; i++)
         {
             float x = (i % perRow) * (width + Gap);
@@ -186,7 +186,12 @@ public class MonthlyReport : XtraReport
             // Sürekli ölçek: aynı güne düşen işlemler toplanmaz, her biri ayrı nokta olarak çizilir.
             diagram.AxisX.DateTimeScaleOptions.ScaleMode = Charts.ScaleMode.Continuous;
             diagram.AxisX.Label.TextPattern = "{A:dd.MM}";
-            diagram.AxisY.WholeRange.AlwaysShowZero = false;
+            // Eksen sıfırdan başlamasın: bakiyenin oynadığı aralık (biraz boşlukla) gösterilsin.
+            double min = (double)_data.Equity.Min(p => p.Balance);
+            double max = (double)_data.Equity.Max(p => p.Balance);
+            double pad = Math.Max((max - min) * 0.1, Math.Max(Math.Abs(max) * 0.01, 1));
+            diagram.AxisY.WholeRange.SetMinMaxValues(min - pad, max + pad);
+            diagram.AxisY.VisualRange.SetMinMaxValues(min - pad, max + pad);
             diagram.AxisY.Label.TextPattern = "{V:#,##0}";
         }
         band.Controls.Add(chart);
@@ -236,7 +241,7 @@ public class MonthlyReport : XtraReport
         foreach (string insight in _data.Insights)
         {
             band.Controls.Add(Label("•", 0, y, 12, 18, F(9, bold: true), Accent));
-            XRLabel text = Label(insight, 14, y, PageWidth - 14, 18, F(9), Ink);
+            XRLabel text = Label(insight, 14, y, ContentWidth - 14, 18, F(9), Ink);
             text.WordWrap = true;
             text.CanGrow = true; // Uzun satır ikinci satıra geçer, alttakiler kendiliğinden aşağı kayar.
             band.Controls.Add(text);
@@ -248,7 +253,7 @@ public class MonthlyReport : XtraReport
     private float BuildBreakdowns(Band band, float y)
     {
         y = SectionTitle(band, y, "Kırılımlar", "Kapanan işlemler, net kâra göre sıralı (gün tablosu haftanın sırasıyla)");
-        float width = (PageWidth - Gap) / 2;
+        float width = (ContentWidth - Gap) / 2;
 
         float left = BreakdownTable(band, 0, y, width, "Setup", _data.BySetup);
         float right = BreakdownTable(band, width + Gap, y, width, "Sembol", _data.BySymbol);
@@ -311,7 +316,7 @@ public class MonthlyReport : XtraReport
 
         var header = new GroupHeaderBand { PageBreak = PageBreak.BeforeBand, RepeatEveryPage = true, HeightF = 56 };
         float y = SectionTitle(header, 0, "İşlemler", $"Bu ay kapanan {_data.Trades.Count} işlem, kapanış sırasıyla");
-        var headerTable = new XRTable { LocationF = new PointF(0, y), SizeF = new SizeF(PageWidth, rowHeight), Borders = BorderSide.None };
+        var headerTable = new XRTable { LocationF = new PointF(0, y), SizeF = new SizeF(ContentWidth, rowHeight), Borders = BorderSide.None };
         headerTable.BeginInit();
         headerTable.Rows.Add(TableRow(rowHeight, titles, weights, align, header: true));
         headerTable.EndInit();
@@ -319,7 +324,7 @@ public class MonthlyReport : XtraReport
         header.HeightF = y + rowHeight;
 
         var detail = new DetailBand { HeightF = rowHeight };
-        var table = new XRTable { LocationF = new PointF(0, 0), SizeF = new SizeF(PageWidth, rowHeight), Borders = BorderSide.None };
+        var table = new XRTable { LocationF = new PointF(0, 0), SizeF = new SizeF(ContentWidth, rowHeight), Borders = BorderSide.None };
         table.BeginInit();
         XRTableRow row = TableRow(rowHeight, new string[titles.Length], weights, align, header: false);
         table.Rows.Add(row);
@@ -360,7 +365,7 @@ public class MonthlyReport : XtraReport
         band.Controls.Add(Label($"EdgeBook  ·  {period} raporu", 0, 14, 400, 16, F(7.5f), Faint));
         band.Controls.Add(new XRPageInfo
         {
-            LocationF = new PointF(PageWidth - 200, 14),
+            LocationF = new PointF(ContentWidth - 200, 14),
             SizeF = new SizeF(200, 16),
             PageInfo = PageInfo.NumberOfTotal,
             TextFormatString = "Sayfa {0} / {1}",
@@ -396,7 +401,7 @@ public class MonthlyReport : XtraReport
     private static float SectionTitle(Band band, float y, string title, string hint)
     {
         band.Controls.Add(Label(title, 0, y, 300, 22, F(11, bold: true), Ink));
-        band.Controls.Add(Label(hint, 300, y + 4, PageWidth - 300, 16, F(7.5f), Faint, TextAlignment.MiddleRight));
+        band.Controls.Add(Label(hint, 300, y + 4, ContentWidth - 300, 16, F(7.5f), Faint, TextAlignment.MiddleRight));
         return y + 26;
     }
 
@@ -428,7 +433,7 @@ public class MonthlyReport : XtraReport
         var chart = new XRChart
         {
             LocationF = new PointF(0, y),
-            SizeF = new SizeF(PageWidth, height),
+            SizeF = new SizeF(ContentWidth, height),
             BackColor = Color.White,
             Borders = BorderSide.None
         };
