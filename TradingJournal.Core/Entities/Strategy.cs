@@ -18,5 +18,11 @@ public class Strategy : BaseEntity
 
     public ICollection<Trade> Trades { get; set; } = new List<Trade>();
 
+    // Kontrol listesi: bu setup'a girmeden önce sağlanması gereken kurallar.
+    public ICollection<StrategyRule> Rules { get; set; } = new List<StrategyRule>();
+
+    // Listede gösterilir; veritabanına yazılmaz (sadece okunabilir, hesaplanan değer).
+    public int RuleCount => Rules.Count;
+
     public override string ToString() => Name;
 }

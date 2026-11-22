@@ -18,6 +18,9 @@ public class TradingJournalDbContext : DbContext
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<Trade> Trades => Set<Trade>();
     public DbSet<TradeScreenshot> TradeScreenshots => Set<TradeScreenshot>();
+    public DbSet<StrategyRule> StrategyRules => Set<StrategyRule>();
+    public DbSet<TradeRuleCheck> TradeRuleChecks => Set<TradeRuleCheck>();
+    public DbSet<DailyNote> DailyNotes => Set<DailyNote>();
 
     // ForexTrade ve CryptoTrade ayrı tablo değil; Trades tablosundaki "TradeType"
     // sütunuyla ayırt edilir (TPH: Table-Per-Hierarchy). Ayarlar Configurations klasöründe.

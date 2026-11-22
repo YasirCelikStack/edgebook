@@ -17,7 +17,8 @@ public class TradeRepository : Repository<Trade>, ITradeRepository
         .Include(t => t.Instrument)
         .Include(t => t.Strategy)
         .Include(t => t.Tags)
-        .Include(t => t.Screenshots);
+        .Include(t => t.Screenshots)
+        .Include(t => t.RuleChecks).ThenInclude(c => c.Rule);
 
     public async Task<List<Trade>> GetAllWithDetailsAsync()
         => await WithDetails().OrderByDescending(t => t.OpenTime).ToListAsync();

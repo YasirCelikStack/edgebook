@@ -92,6 +92,37 @@ namespace TradingJournal.Data.Migrations
                     b.ToTable("AccountRules", (string)null);
                 });
 
+            modelBuilder.Entity("TradingJournal.Core.Entities.DailyNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Mood")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Plan")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Review")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique();
+
+                    b.ToTable("DailyNotes", (string)null);
+                });
+
             modelBuilder.Entity("TradingJournal.Core.Entities.Instrument", b =>
                 {
                     b.Property<int>("Id")
@@ -194,6 +225,30 @@ namespace TradingJournal.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Strategies", (string)null);
+                });
+
+            modelBuilder.Entity("TradingJournal.Core.Entities.StrategyRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StrategyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StrategyId");
+
+                    b.ToTable("StrategyRules", (string)null);
                 });
 
             modelBuilder.Entity("TradingJournal.Core.Entities.Tag", b =>
@@ -326,6 +381,24 @@ namespace TradingJournal.Data.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("TradingJournal.Core.Entities.TradeRuleCheck", b =>
+                {
+                    b.Property<int>("TradeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StrategyRuleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsMet")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TradeId", "StrategyRuleId");
+
+                    b.HasIndex("StrategyRuleId");
+
+                    b.ToTable("TradeRuleChecks", (string)null);
+                });
+
             modelBuilder.Entity("TradingJournal.Core.Entities.TradeScreenshot", b =>
                 {
                     b.Property<int>("Id")
@@ -409,6 +482,17 @@ namespace TradingJournal.Data.Migrations
                     b.Navigation("Account");
                 });
 
+            modelBuilder.Entity("TradingJournal.Core.Entities.StrategyRule", b =>
+                {
+                    b.HasOne("TradingJournal.Core.Entities.Strategy", "Strategy")
+                        .WithMany("Rules")
+                        .HasForeignKey("StrategyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Strategy");
+                });
+
             modelBuilder.Entity("TradingJournal.Core.Entities.Trade", b =>
                 {
                     b.HasOne("TradingJournal.Core.Entities.Account", "Account")
@@ -433,6 +517,25 @@ namespace TradingJournal.Data.Migrations
                     b.Navigation("Instrument");
 
                     b.Navigation("Strategy");
+                });
+
+            modelBuilder.Entity("TradingJournal.Core.Entities.TradeRuleCheck", b =>
+                {
+                    b.HasOne("TradingJournal.Core.Entities.StrategyRule", "Rule")
+                        .WithMany("Checks")
+                        .HasForeignKey("StrategyRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TradingJournal.Core.Entities.Trade", "Trade")
+                        .WithMany("RuleChecks")
+                        .HasForeignKey("TradeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Rule");
+
+                    b.Navigation("Trade");
                 });
 
             modelBuilder.Entity("TradingJournal.Core.Entities.TradeScreenshot", b =>
@@ -460,11 +563,20 @@ namespace TradingJournal.Data.Migrations
 
             modelBuilder.Entity("TradingJournal.Core.Entities.Strategy", b =>
                 {
+                    b.Navigation("Rules");
+
                     b.Navigation("Trades");
+                });
+
+            modelBuilder.Entity("TradingJournal.Core.Entities.StrategyRule", b =>
+                {
+                    b.Navigation("Checks");
                 });
 
             modelBuilder.Entity("TradingJournal.Core.Entities.Trade", b =>
                 {
+                    b.Navigation("RuleChecks");
+
                     b.Navigation("Screenshots");
                 });
 #pragma warning restore 612, 618

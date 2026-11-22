@@ -26,6 +26,9 @@ public abstract class Trade : BaseEntity
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();
     public ICollection<TradeScreenshot> Screenshots { get; set; } = new List<TradeScreenshot>();
 
+    // Strateji kontrol listesinin bu işlemdeki cevapları.
+    public ICollection<TradeRuleCheck> RuleChecks { get; set; } = new List<TradeRuleCheck>();
+
     // --- İşlem bilgileri ---
     public TradeDirection Direction { get; set; }
     public DateTime OpenTime { get; set; }
@@ -107,4 +110,9 @@ public abstract class Trade : BaseEntity
     }
 
     public bool IsWin => NetPnL > 0;
+
+    // Kurala uyum: kontrol listesi doldurulmadıysa NotTracked, hepsine uyulduysa Followed, biri bile çiğnendiyse Broken.
+    public RuleCompliance Compliance => RuleChecks.Count == 0
+        ? RuleCompliance.NotTracked
+        : RuleChecks.All(c => c.IsMet) ? RuleCompliance.Followed : RuleCompliance.Broken;
 }
