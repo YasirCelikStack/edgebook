@@ -6,6 +6,8 @@ namespace TradingJournal.UI.Controls;
 
 // Aylık PnL takvimi. Her gün hücresinde o günün net sonucu ve işlem sayısı,
 // en sağ sütunda haftanın toplamı görünür. Kâr yeşil, zarar kırmızı; tutar büyüdükçe renk koyulaşır.
+// Tıklanan gün seçilir (günlük not için); çift tıklanan gün işlemler listesinde açılır.
+// Notu olan günlerin sağ üst köşesinde küçük bir not işareti çizilir.
 [DesignerCategory("Code")]
 public class PnlCalendar : Control
 {
@@ -15,10 +17,16 @@ public class PnlCalendar : Control
     private DateTime _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private Dictionary<DateTime, DaySummary> _days = new();
     private DateTime? _hoverDay;
+    private DateTime? _selectedDay;
+    private HashSet<DateTime> _noteDays = new();
 
     public record DaySummary(decimal NetPnL, int TradeCount);
 
+    // Çift tıklama: o günün işlemlerini aç (sadece işlem olan günlerde).
     public event EventHandler<DateTime>? DayClicked;
+
+    // Tek tıklama: günü seç (her gün seçilebilir, işlem olmasa da).
+    public event EventHandler<DateTime>? DaySelected;
 
     public PnlCalendar()
     {
@@ -38,6 +46,19 @@ public class PnlCalendar : Control
     {
         _days = days;
         Invalidate();
+    }
+
+    public void SetNoteDays(IEnumerable<DateTime> days)
+    {
+        _noteDays = days.Select(d => d.Date).ToHashSet();
+        Invalidate();
+    }
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public DateTime? SelectedDay
+    {
+        get => _selectedDay;
+        set { _selectedDay = value?.Date; Invalidate(); }
     }
 
     // Ayın ilk gününün bulunduğu haftanın pazartesisi.
@@ -82,7 +103,7 @@ public class PnlCalendar : Control
         if (day != _hoverDay)
         {
             _hoverDay = day;
-            Cursor = day is DateTime d && _days.ContainsKey(d) ? Cursors.Hand : Cursors.Default;
+            Cursor = day is not null ? Cursors.Hand : Cursors.Default;
             Invalidate();
         }
     }
@@ -97,7 +118,15 @@ public class PnlCalendar : Control
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
-        if (DayAt(e.Location) is DateTime day && _days.ContainsKey(day))
+        if (e.Button != MouseButtons.Left || DayAt(e.Location) is not DateTime day) return;
+        SelectedDay = day;
+        DaySelected?.Invoke(this, day);
+    }
+
+    protected override void OnMouseDoubleClick(MouseEventArgs e)
+    {
+        base.OnMouseDoubleClick(e);
+        if (e.Button == MouseButtons.Left && DayAt(e.Location) is DateTime day && _days.ContainsKey(day))
             DayClicked?.Invoke(this, day);
     }
 
@@ -138,15 +167,23 @@ public class PnlCalendar : Control
                     double strength = 0.15 + 0.45 * (double)(Math.Abs(summary.NetPnL) / maxAbs);
                     fill = Theme.Tint(Theme.ForValue(summary.NetPnL == 0 ? null : summary.NetPnL), strength, Theme.Background);
                 }
-                if (_hoverDay == day && summary is not null)
-                    fill = ControlPaint.Light(fill, 0.15f);
+                if (_hoverDay == day)
+                    fill = summary is not null ? ControlPaint.Light(fill, 0.15f) : Theme.CardHover;
 
                 Theme.FillRounded(g, fill, inner, 8);
-                if (day == DateTime.Today)
+                if (day == _selectedDay || day == DateTime.Today)
                 {
                     using var path = Theme.RoundedRect(inner, 8);
-                    using var pen = new Pen(Theme.Accent, 1.5f);
+                    using var pen = new Pen(day == _selectedDay ? Color.White : Theme.Accent, day == _selectedDay ? 2f : 1.5f);
                     g.DrawPath(pen, path);
+                }
+
+                // Notu olan gün: sağ üstte küçük not simgesi.
+                if (_noteDays.Contains(day))
+                {
+                    TextRenderer.DrawText(g, "\uE70B", Theme.Icons,
+                        new Rectangle((int)inner.Right - 26, (int)inner.Y + 4, 22, 20), inMonth ? Theme.Accent : Theme.TextFaint,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
                 }
 
                 Color dayColor = inMonth ? Theme.TextMuted : Theme.TextFaint;
