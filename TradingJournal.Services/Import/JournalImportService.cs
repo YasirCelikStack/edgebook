@@ -93,8 +93,9 @@ public class JournalImportService
     // Chart Vault'tan aktarılmış işlemlerin grafik görsellerini indirir ve işlemlere ekran görüntüsü olarak ekler.
     // Daha önce indirilen görseller (açıklamasında "chartvault:<chart_id>" olanlar) tekrar indirilmez.
     // Hem yeni aktarımdan sonra hem de eski işlemler için ayrıca çağrılabilir.
+    // onlyExternalIds verilirse sadece o işlemlerin görselleri indirilir (ör. az önce seçilip aktarılanlar).
     public async Task<ShotDownloadResult> DownloadChartVaultShotsAsync(ChartVaultApiImporter importer,
-        IProgress<string>? progress = null, CancellationToken ct = default)
+        IProgress<string>? progress = null, IReadOnlyCollection<string>? onlyExternalIds = null, CancellationToken ct = default)
     {
         const string prefix = "chartvault:";
         Dictionary<string, int> tradeIdByJournalId;
@@ -104,6 +105,7 @@ public class JournalImportService
                     .Where(t => t.ExternalId != null && t.ExternalId.StartsWith(prefix))
                     .Select(t => new { t.Id, t.ExternalId })
                     .ToListAsync(ct))
+                .Where(t => onlyExternalIds is null || onlyExternalIds.Contains(t.ExternalId!))
                 .ToDictionary(t => t.ExternalId![prefix.Length..], t => t.Id);
         }
 
@@ -142,6 +144,31 @@ public class JournalImportService
         }
 
         return new ShotDownloadResult(downloaded, alreadyHad, failed, errors);
+    }
+
+    // Önizleme için: hangi Chart Vault kayıtlarının bağlı bir grafik görseli var?
+    // Dönen küme ExternalId'lerden ("chartvault:<id>") oluşur. Görsel listesi alınamazsa null döner;
+    // bu durumda önizleme yine çalışır, sadece "Görsel" sütunu boş kalır.
+    public async Task<HashSet<string>?> GetTradesWithShotsAsync(ChartVaultApiImporter importer,
+        IEnumerable<ImportedTrade> trades, CancellationToken ct = default)
+    {
+        const string prefix = "chartvault:";
+        List<string> journalIds = trades
+            .Where(t => t.ExternalId.StartsWith(prefix))
+            .Select(t => t.ExternalId[prefix.Length..])
+            .ToList();
+        if (journalIds.Count == 0)
+            return new HashSet<string>();
+
+        try
+        {
+            List<ChartVaultShot> shots = await importer.FetchShotsAsync(journalIds, ct);
+            return shots.Select(s => prefix + s.JournalId).ToHashSet();
+        }
+        catch (Exception ex) when (ex is ImportException or HttpRequestException or TaskCanceledException)
+        {
+            return null;
+        }
     }
 
     private static async Task<HashSet<string>> LoadExistingIdsAsync(TradingJournalDbContext db)
