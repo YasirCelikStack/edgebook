@@ -88,6 +88,9 @@ Koyu tema, solda menü, üstte hesap seçici ve "Yeni işlem" (Ctrl+N) düğmesi
 - **Yapay zeka koçu:** Gemini ile koç raporu ve işlemler hakkında soru-cevap (ayrıntılar aşağıda).
 - **Chart Vault:** Chart Vault web uygulamasındaki Journal işlemlerini içe aktarma (ayrıntılar aşağıda).
 - **Tanımlar:** Hesaplar (risk kuralları dahil), enstrümanlar, stratejiler, etiketler. Hepsi tek bir generic `EntityListForm<T>` sınıfından türer.
+- **Aylık rapor (PDF):** Üst çubuktaki **Aylık rapor** düğmesi. DevExpress XtraReports ile kodla kurulan, yazdırılabilir rapor: KPI özeti ve önceki ayla karşılaştırma, equity curve, günlük kâr/zarar grafiği, otomatik gözlemler, setup / sembol / seans / gün kırılımları ve ayın tüm işlemleri. Önizlenebilir veya PDF olarak kaydedilebilir. Hesaplar `MonthlyReportService`'te (Services katmanı), rapor tasarımı `MonthlyReport`'ta (UI katmanı).
+- **Yedekleme:** Tanımlar sayfasında **Yedek al** tüm veriyi (veritabanı, ekran görüntüleri, koç raporları) kullanıcının seçtiği yere tek bir `.zip` olarak kaydeder; veritabanı SQLite'ın yedekleme komutuyla tutarlı şekilde kopyalanır. **Yedekten yükle** önce mevcut veriyi otomatik yedekler (`%LocalAppData%\EdgeBook\backups`), sonra yedeği geri yükleyip uygulamayı yeniden başlatır.
+- **Yenilikler:** Güncellemeden sonraki ilk açılışta o sürümde gelen özellikler gösterilir (`ReleaseNotes.cs`). Sürüm yazısına tıklayınca da açılır.
 
 ## Yeni sürüm yayınlama (geliştirici)
 
@@ -95,6 +98,8 @@ Kurulum dosyası ve otomatik güncellemeler [Velopack](https://velopack.io) ile 
 
 1. Bir kez: repoda **Settings → Secrets and variables → Actions** altına `DEVEXPRESS_NUGET_KEY`, `CHARTVAULT_SUPABASE_URL` ve `CHARTVAULT_PUBLISHABLE_KEY` secret'larını ekleyin.
 2. Her sürümde: **Actions → Yeni sürüm yayınla → Run workflow**, sürüm numarasını yazın (ör. `1.0.2`) ve çalıştırın.
+
+Yayından önce `TradingJournal.UI/Helpers/ReleaseNotes.cs` dosyasına yeni sürümün maddelerini ekleyin; kullanıcılar güncellemeden sonra bunları "Yenilikler" penceresinde görür.
 
 İş akışı uygulamayı self-contained derler, `vpk pack` ile kurulum ve güncelleme paketlerini üretir ve `vpk upload github` ile yayınlar. Gemini anahtarı pakete hiçbir zaman konmaz. Paket kimliği `EdgeBookApp`tir; uygulama `%LocalAppData%\EdgeBookApp` altına kurulur, veriler ayrı klasörde (`%LocalAppData%\EdgeBook`) kalır. Aynı işi yerel olarak yapan [release.ps1](release.ps1) betiği de yedek olarak durur.
 

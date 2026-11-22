@@ -6,6 +6,7 @@ using TradingJournal.UI.Controls;
 using TradingJournal.UI.Forms.Trades;
 using TradingJournal.UI.Helpers;
 using TradingJournal.UI.Pages;
+using TradingJournal.UI.Reports;
 using TradingJournal.UI.Theming;
 using Velopack;
 
@@ -24,6 +25,7 @@ public class MainForm : XtraForm
     private readonly Label _subtitle = new() { AutoSize = true, Font = Theme.Body, ForeColor = Theme.TextMuted, Location = new Point(24, 50) };
     private readonly ImageComboBoxEdit _accountPicker = new() { Width = 230 };
     private readonly FlatButton _newTradeButton = new("Yeni işlem", Theme.Glyph.Add, primary: true);
+    private readonly FlatButton _reportButton = new("Aylık rapor", "\uE8A5");
 
     // Yeni sürüm çıkınca en üstte görünen şerit.
     private readonly Panel _updateBanner = new() { Dock = DockStyle.Top, Height = 48, BackColor = Theme.Tint(Theme.Accent, 0.35, Theme.Background), Visible = false };
@@ -107,6 +109,42 @@ public class MainForm : XtraForm
         _ = CheckForUpdatesAsync(userRequested: false);
     }
 
+    // Pencere ekrana geldikten sonra: güncellemeden sonraki ilk açılışsa "Yenilikler" penceresi.
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        Version current = ReleaseNotes.ParseVersion(AppUpdater.CurrentVersion);
+        // Hesaplar OnLoad'da arka planda yüklendiği için burada doğrudan veritabanına bakılır.
+        bool hasExistingData;
+        try
+        {
+            using var db = TradingJournal.Data.DbContextFactory.Create();
+            hasExistingData = db.Accounts.Any();
+        }
+        catch (Exception)
+        {
+            hasExistingData = false;
+        }
+        List<ReleaseNotes.Release> unseen = ReleaseNotes.TakeUnseen(current, hasExistingData);
+        if (unseen.Count == 0) return;
+
+        using var form = new WhatsNewForm(unseen);
+        form.ShowDialog(this);
+    }
+
+    // Sürüm yazısına tıklanınca güncelleme yoksa: bu sürümün yenilikleri.
+    private void ShowCurrentReleaseNotes(string headline)
+    {
+        List<ReleaseNotes.Release> notes = ReleaseNotes.ForVersion(ReleaseNotes.ParseVersion(AppUpdater.CurrentVersion));
+        if (notes.Count == 0)
+        {
+            XtraMessageBox.Show(this, headline, "Güncellemeler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        using var form = new WhatsNewForm(notes, headline);
+        form.ShowDialog(this);
+    }
+
     private void BuildTopBar()
     {
         _accountPicker.Properties.Buttons[0].Kind = ButtonPredefines.Combo;
@@ -117,8 +155,14 @@ public class MainForm : XtraForm
         _accountPicker.EditValueChanged += (_, _) => OnAccountPicked();
 
         _newTradeButton.Click += async (_, _) => await NewTradeAsync();
+        _reportButton.Click += (_, _) =>
+        {
+            // Rapor, üst çubukta seçili hesap (veya tüm hesaplar) için hazırlanır.
+            using var form = new MonthlyReportForm(_state);
+            form.ShowDialog(this);
+        };
 
-        _topBar.Controls.AddRange([_title, _subtitle, _accountPicker, _newTradeButton]);
+        _topBar.Controls.AddRange([_title, _subtitle, _accountPicker, _reportButton, _newTradeButton]);
         _topBar.Resize += (_, _) => PositionTopBarControls();
         PositionTopBarControls();
     }
@@ -142,9 +186,7 @@ public class MainForm : XtraForm
         if (!AppUpdater.IsInstalled)
         {
             if (userRequested)
-                XtraMessageBox.Show(this,
-                    $"Bu bir geliştirme sürümü (v{AppUpdater.CurrentVersion}). Güncellemeler sadece kurulum dosyasıyla kurulan sürümde denetlenir.",
-                    "Güncellemeler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowCurrentReleaseNotes($"Geliştirme sürümü (v{AppUpdater.CurrentVersion})");
             return;
         }
 
@@ -152,8 +194,7 @@ public class MainForm : XtraForm
         if (update is null)
         {
             if (userRequested)
-                XtraMessageBox.Show(this, $"EdgeBook güncel (v{AppUpdater.CurrentVersion}).", "Güncellemeler",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowCurrentReleaseNotes($"EdgeBook güncel (v{AppUpdater.CurrentVersion})");
             return;
         }
 
@@ -209,6 +250,7 @@ public class MainForm : XtraForm
     {
         _newTradeButton.Location = new Point(_topBar.Width - _newTradeButton.Width - 24, 24);
         _accountPicker.Location = new Point(_newTradeButton.Left - _accountPicker.Width - 12, 30);
+        _reportButton.Location = new Point(_accountPicker.Left - _reportButton.Width - 12, 24);
     }
 
     // Hesap listesini yeniler; seçili hesabı korur (Tanımlar'da hesap eklenmiş/silinmiş olabilir).
