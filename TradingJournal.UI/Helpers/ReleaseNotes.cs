@@ -11,6 +11,12 @@ public static class ReleaseNotes
 
     public static IReadOnlyList<Release> All { get; } =
     [
+        new(new Version(1, 0, 5),
+        [
+            new("\uE90F", "Chart Vault aktarımında kâr/zarar düzeltmesi",
+                "Petrol (USOIL, UKOIL...), endeks ve gümüş işlemleri artık doğru pip ayarıyla gelir; lot 0,01'e yuvarlanmadığı için " +
+                "aktarılan işlemin sonucu Chart Vault'taki R × risk tutarıyla birebir tutar. Eski hatalı kayıtları silip tekrar aktarabilirsin.")
+        ]),
         new(new Version(1, 0, 4),
         [
             new("\uE73A", "Strateji kontrol listesi",

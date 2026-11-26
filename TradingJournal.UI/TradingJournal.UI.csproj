@@ -18,7 +18,7 @@
     <Product>EdgeBook</Product>
     <Company>Yasir Celik</Company>
     <!-- Sürüm: yayın betiği (release.ps1) bunu -p:Version=... ile ezer. -->
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <!-- Exe simgesi (Masaüstü, Başlat menüsü, Dosya Gezgini). -->
     <ApplicationIcon>Assets\edgebook.ico</ApplicationIcon>
     <!-- Bilgisayarında kurulu DevExpress sürümü (Visual Studio > Extensions > DevExpress > About). -->

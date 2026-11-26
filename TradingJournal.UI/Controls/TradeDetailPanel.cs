@@ -292,7 +292,7 @@ public class TradeDetailPanel : Panel
     {
         string size = trade switch
         {
-            ForexTrade f => $"{f.LotSize:0.##} lot",
+            ForexTrade f => $"{f.LotSize:0.####} lot",
             CryptoTrade c => $"{c.Quantity:0.####} (x{c.Leverage})",
             _ => "-"
         };

@@ -37,7 +37,7 @@ public class TradeEditForm : DialogFormBase
     private readonly SpinEdit _entry = EditorFactory.Decimal();
     private readonly SpinEdit _stop = EditorFactory.Decimal();
     private readonly SpinEdit _takeProfit = EditorFactory.Decimal();
-    private readonly SpinEdit _lotSize = EditorFactory.Decimal(decimals: 2);
+    private readonly SpinEdit _lotSize = EditorFactory.Decimal(decimals: 6);
     private readonly SpinEdit _quantity = EditorFactory.Decimal(decimals: 6);
     private readonly SpinEdit _leverage = EditorFactory.Integer(1, 125);
     private readonly SpinEdit _commission = EditorFactory.Decimal(decimals: 2);

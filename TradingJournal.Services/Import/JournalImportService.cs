@@ -193,11 +193,13 @@ public class JournalImportService
         {
             decimal stopPips = stopDistance / instrument.PipSize;
             decimal lot = riskAmount / (stopPips * instrument.PipValuePerLot);
+            // Lot 0,01'e yuvarlanmaz: Chart Vault R ile çalışır, net sonuç R × risk tutarına eşit çıkmalı.
+            // (Eskiden en az 0,01 lot yazılıyordu; küçük lot gereken işlemlerde risk ve kâr onlarca kat büyüyordu.)
             trade = new ForexTrade
             {
                 PipSize = instrument.PipSize,
                 PipValuePerLot = instrument.PipValuePerLot,
-                LotSize = Math.Max(0.01m, Math.Round(lot, 2))
+                LotSize = Math.Max(0.000001m, Math.Round(lot, 6))
             };
         }
 
@@ -249,18 +251,36 @@ public class JournalImportService
         }
         else
         {
-            // Forex için yaygın değerler; farklıysa Tanımlar > Enstrümanlar'dan düzeltilebilir.
+            // Yaygın broker değerleri; farklıysa Tanımlar > Enstrümanlar'dan düzeltilebilir.
             instrument.Type = InstrumentType.Forex;
-            instrument.PipSize = symbol.Contains("JPY") ? 0.01m
-                : symbol.StartsWith("XAU") ? 0.1m
-                : symbol.StartsWith("XAG") ? 0.01m
-                : 0.0001m;
-            instrument.PipValuePerLot = 10m;
+            (instrument.PipSize, instrument.PipValuePerLot) = ForexSpecFor(symbol);
         }
 
         db.Instruments.Add(instrument);
         cache[symbol] = instrument;
         return instrument;
+    }
+
+    // (pip büyüklüğü, 1 lotta 1 pip'in dolar değeri)
+    private static (decimal PipSize, decimal PipValuePerLot) ForexSpecFor(string symbol)
+    {
+        string s = symbol.ToUpperInvariant();
+
+        // Petrol: 1 lot = 1000 varil, 1 pip = 0,01 $ → lot başına 10 $
+        if (s.Contains("OIL") || s.Contains("WTI") || s.Contains("BRENT")
+            || s.StartsWith("XTI") || s.StartsWith("XBR") || s.StartsWith("USO") || s.StartsWith("UKO"))
+            return (0.01m, 10m);
+
+        // Altın: 1 lot = 100 ons, 1 pip = 0,1 $ → 10 $. Gümüş: 1 lot = 5000 ons, 1 pip = 0,01 $ → 50 $
+        if (s.StartsWith("XAU")) return (0.1m, 10m);
+        if (s.StartsWith("XAG")) return (0.01m, 50m);
+
+        // Endeksler: 1 lot = 1 kontrat, 1 puan = 1 $ (brokere göre değişir)
+        string[] indices = ["US30", "DJ30", "NAS100", "US100", "USTEC", "SPX500", "US500", "GER40", "DE40", "UK100", "JP225"];
+        if (indices.Any(s.StartsWith))
+            return (1m, 1m);
+
+        return (s.Contains("JPY") ? 0.01m : 0.0001m, 10m);
     }
 
     private static bool IsCrypto(string symbol)
